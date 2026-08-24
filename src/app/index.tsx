@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -9,6 +9,14 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  defaultAppData,
+  loadAppData,
+  makeNotification,
+  saveAppData,
+  type AppData,
+  type HousingApplication,
+} from '@/data/storage';
 
 const COLORS = {
   ink: '#243b34',
@@ -20,29 +28,6 @@ const COLORS = {
   canvas: '#f4f7f3',
   white: '#ffffff',
 };
-
-type Application = {
-  id: number;
-  title: string;
-  type: string;
-  area: string;
-  rank: number;
-  previousRank: number;
-  color: string;
-  initials: string;
-};
-
-const applications: Application[] = [
-  { id: 1, title: '마곡나루 행복주택', type: '행복주택 · 16㎡', area: '서울 강서구', rank: 24, previousRank: 31, color: '#ddf1e8', initials: 'MN' },
-  { id: 2, title: '고양삼송 A-11블록', type: '국민임대 · 36㎡', area: '경기 고양시', rank: 67, previousRank: 67, color: '#eae8f7', initials: 'GS' },
-  { id: 3, title: '위례 A2-4블록', type: '청년 매입임대 · 24㎡', area: '서울 송파구', rank: 108, previousRank: 116, color: '#fbe9dc', initials: 'WR' },
-];
-
-const starterTasks = [
-  { id: 1, title: '주민등록등본 발급하기', detail: '마곡나루 · 이번 주 금요일까지', done: false },
-  { id: 2, title: '보증금 마련 계획 확인하기', detail: '순번 20번대 진입', done: false },
-  { id: 3, title: '고양삼송 공고문 다시 확인하기', detail: '어제 추가 공지', done: true },
-];
 
 function Chevron({ direction = 'right' }: { direction?: 'right' | 'down' }) {
   return <Text style={direction === 'down' ? styles.chevronDown : styles.chevron}>›</Text>;
@@ -70,29 +55,80 @@ function HomeIllustration() {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const [selectedId, setSelectedId] = useState(1);
-  const [tasks, setTasks] = useState(starterTasks);
+  const [data, setData] = useState<AppData>(defaultAppData);
+  const [selectedId, setSelectedId] = useState(defaultAppData.applications[0].id);
+  const [isReady, setIsReady] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isRankOpen, setIsRankOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftRank, setDraftRank] = useState('');
+  const applications = data.applications;
+  const tasks = data.tasks;
   const selected = applications.find((item) => item.id === selectedId) ?? applications[0];
   const completed = tasks.filter((task) => task.done).length;
-  const rankChange = selected.previousRank - selected.rank;
+  const rankChange = selected ? selected.previousRank - selected.rank : 0;
+
+  useEffect(() => {
+    loadAppData().then((stored) => {
+      setData(stored);
+      setSelectedId(stored.applications[0]?.id ?? defaultAppData.applications[0].id);
+      setIsReady(true);
+    });
+  }, []);
 
   const weekday = useMemo(() => {
     const date = new Date();
     return new Intl.DateTimeFormat('ko-KR', { weekday: 'long', month: 'long', day: 'numeric' }).format(date);
   }, []);
 
-  const toggleTask = (id: number) => {
-    setTasks((current) => current.map((task) => task.id === id ? { ...task, done: !task.done } : task));
+  const updateData = (next: AppData) => {
+    setData(next);
+    void saveAppData(next);
+  };
+
+  const toggleTask = (id: string) => {
+    updateData({ ...data, tasks: tasks.map((task) => task.id === id ? { ...task, done: !task.done } : task) });
   };
 
   const saveApplication = () => {
+    const title = draftTitle.trim();
+    const rank = Number(draftRank);
+    if (!title || !Number.isFinite(rank) || rank < 1) return;
+    const now = new Date().toISOString().slice(0, 10);
+    const newApplication: HousingApplication = {
+      id: `application-${Date.now()}`,
+      title,
+      type: '행복주택 · 미등록 면적',
+      area: '지역 미등록',
+      rank,
+      previousRank: rank,
+      color: '#e4f1ec',
+      initials: title.replace(/\s/g, '').slice(0, 2).toUpperCase(),
+      updatedAt: '방금 전',
+      history: [{ rank, recordedAt: now }],
+    };
+    const next = { ...data, applications: [...applications, newApplication], notifications: [makeNotification('신청 내역을 저장했어요', `${title} ${rank}번을 기록했습니다.`), ...data.notifications] };
+    updateData(next);
+    setSelectedId(newApplication.id);
     setDraftTitle('');
     setDraftRank('');
     setIsAddOpen(false);
   };
+
+  const saveRank = () => {
+    if (!selected) return;
+    const nextRank = Number(draftRank);
+    if (!Number.isFinite(nextRank) || nextRank < 1) return;
+    const moved = selected.rank - nextRank;
+    const updated: HousingApplication = { ...selected, previousRank: selected.rank, rank: nextRank, updatedAt: '방금 전', history: [...selected.history, { rank: nextRank, recordedAt: new Date().toISOString().slice(0, 10) }] };
+    const notification = moved > 0 ? makeNotification(`${selected.title} 순번이 상승했어요`, `${selected.rank}번에서 ${nextRank}번으로 ${moved}계단 가까워졌어요.`) : makeNotification(`${selected.title} 순번을 기록했어요`, `현재 순번은 ${nextRank}번입니다.`);
+    updateData({ ...data, applications: applications.map((item) => item.id === selected.id ? updated : item), notifications: [notification, ...data.notifications] });
+    setDraftRank('');
+    setIsRankOpen(false);
+  };
+
+  if (!isReady || !selected) return <View style={styles.screen} />;
 
   return (
     <View style={styles.screen}>
@@ -103,9 +139,9 @@ export default function HomeScreen() {
               <View style={styles.logo}><View style={styles.logoDot} /></View>
               <Text style={styles.brand}>내 차례</Text>
             </View>
-            <Pressable style={styles.notification} accessibilityLabel="알림">
+            <Pressable style={styles.notification} accessibilityLabel="알림" onPress={() => setIsNotificationOpen(true)}>
               <Text style={styles.bell}>♧</Text>
-              <View style={styles.notificationDot} />
+              {data.notifications.some((item) => !item.read) && <View style={styles.notificationDot} />}
             </Pressable>
           </View>
 
@@ -122,7 +158,7 @@ export default function HomeScreen() {
               <Text style={styles.heroMeta}>{selected.type}  ·  {selected.area}</Text>
               <Text style={styles.rankLabel}>현재 예비순번</Text>
               <View style={styles.rankLine}><Text style={styles.heroRank}>{selected.rank}<Text style={styles.rankUnit}>번</Text></Text><View style={styles.changeBox}><Text style={styles.changeText}>↓ {rankChange}계단</Text><Text style={styles.changeLabel}>지난 확인 대비</Text></View></View>
-              <Pressable style={styles.detailButton}><Text style={styles.detailText}>상세 현황 보기  →</Text></Pressable>
+              <Pressable style={styles.detailButton} onPress={() => { setDraftRank(String(selected.rank)); setIsRankOpen(true); }}><Text style={styles.detailText}>순번 업데이트  →</Text></Pressable>
             </View>
             <HomeIllustration />
           </View>
@@ -132,13 +168,13 @@ export default function HomeScreen() {
             <View style={styles.progressRow}><View style={styles.progressRing}><View style={styles.ringInner}><Text style={styles.ringNumber}>3/5</Text><Text style={styles.ringLabel}>단계 완료</Text></View></View><View style={styles.progressCopy}><Text style={styles.progressStrong}>잘하고 있어요!</Text><Text style={styles.progressSub}>서류 준비를 마치면{`\n`}거의 다 왔어요.</Text><Pressable><Text style={styles.checklistLink}>체크리스트 열기  →</Text></Pressable></View></View>
           </View>
 
-          <View style={styles.sectionHeader}><View><Text style={styles.cardEyebrow}>MY APPLICATIONS</Text><Text style={styles.sectionTitle}>내 신청 현황 <Text style={styles.countPill}>3</Text></Text></View><Pressable onPress={() => setIsAddOpen(true)} style={styles.addSmall}><Text style={styles.addSmallText}>＋ 추가</Text></Pressable></View>
+          <View style={styles.sectionHeader}><View><Text style={styles.cardEyebrow}>MY APPLICATIONS</Text><Text style={styles.sectionTitle}>내 신청 현황 <Text style={styles.countPill}>{applications.length}</Text></Text></View><Pressable onPress={() => setIsAddOpen(true)} style={styles.addSmall}><Text style={styles.addSmallText}>＋ 추가</Text></Pressable></View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.applicationList}>
-            {applications.map((item) => <Pressable key={item.id} onPress={() => setSelectedId(item.id)} style={[styles.applicationCard, selectedId === item.id && styles.applicationSelected]}><View style={[styles.appIcon, { backgroundColor: item.color }]}><Text style={styles.appInitials}>{item.initials}</Text></View><Text style={styles.appTitle} numberOfLines={1}>{item.title}</Text><Text style={styles.appMeta}>{item.type}</Text><View style={styles.appRankLine}><Text style={styles.appRank}>{item.rank}<Text style={styles.appRankUnit}>번</Text></Text>{item.rank !== item.previousRank ? <Text style={styles.upTag}>↓ {item.previousRank - item.rank}</Text> : <Text style={styles.sameTag}>변동 없음</Text>}</View></Pressable>)}
+            {applications.map((item) => <Pressable key={item.id} onPress={() => setSelectedId(item.id)} style={[styles.applicationCard, selectedId === item.id && styles.applicationSelected]}><View style={[styles.appIcon, { backgroundColor: item.color }]}><Text style={styles.appInitials}>{item.initials}</Text></View><Text style={styles.appTitle} numberOfLines={1}>{item.title}</Text><Text style={styles.appMeta}>{item.type}</Text><View style={styles.appRankLine}><Text style={styles.appRank}>{item.rank}<Text style={styles.appRankUnit}>번</Text></Text>{item.rank !== item.previousRank ? <Text style={styles.upTag}>↓ {item.previousRank - item.rank}</Text> : <Text style={styles.sameTag}>변동 없음</Text>}</View><Text style={styles.appUpdated}>{item.updatedAt}</Text></Pressable>)}
           </ScrollView>
 
-          <View style={styles.lowerHeader}><View><Text style={styles.cardEyebrow}>NEXT STEPS</Text><Text style={styles.sectionTitle}>준비할 일 <Text style={styles.taskCount}>{completed}/{tasks.length}</Text></Text></View><Pressable onPress={() => setTasks((current) => [...current, { id: Date.now(), title: '이사 예상 비용 계산하기', detail: '전체 신청 · 아직 시작하지 않음', done: false }])}><Text style={styles.moreText}>할 일 추가  ＋</Text></Pressable></View>
-          <View style={styles.taskCard}>{tasks.map((task) => <Pressable key={task.id} onPress={() => toggleTask(task.id)} style={styles.taskRow}><View style={[styles.checkbox, task.done && styles.checkboxDone]}>{task.done && <Text style={styles.checkMark}>✓</Text>}</View><View style={styles.taskText}><Text style={[styles.taskTitle, task.done && styles.taskDone]}>{task.title}</Text><Text style={styles.taskDetail}>{task.detail}</Text></View>{!task.done && task.id === 1 && <View style={styles.urgentDot} />}</Pressable>)}</View>
+          <View style={styles.lowerHeader}><View><Text style={styles.cardEyebrow}>NEXT STEPS</Text><Text style={styles.sectionTitle}>준비할 일 <Text style={styles.taskCount}>{completed}/{tasks.length}</Text></Text></View><Pressable onPress={() => updateData({ ...data, tasks: [...tasks, { id: `task-${Date.now()}`, title: '이사 예상 비용 계산하기', detail: '전체 신청 · 아직 시작하지 않음', done: false }] })}><Text style={styles.moreText}>할 일 추가  ＋</Text></Pressable></View>
+          <View style={styles.taskCard}>{tasks.map((task) => <Pressable key={task.id} onPress={() => toggleTask(task.id)} style={styles.taskRow}><View style={[styles.checkbox, task.done && styles.checkboxDone]}>{task.done && <Text style={styles.checkMark}>✓</Text>}</View><View style={styles.taskText}><Text style={[styles.taskTitle, task.done && styles.taskDone]}>{task.title}</Text><Text style={styles.taskDetail}>{task.detail}</Text></View>{!task.done && task.id === 'resident-doc' && <View style={styles.urgentDot} />}</Pressable>)}</View>
 
           <View style={styles.tipBanner}><View style={styles.tipCircle}><Text style={styles.tipSpark}>✦</Text></View><View style={{ flex: 1 }}><Text style={styles.tipTitle}>이번 주의 팁</Text><Text style={styles.tipBody}>순번이 20번대라면 서류를 미리 준비해두세요.</Text></View><Chevron /></View>
         </ScrollView>
@@ -146,6 +182,14 @@ export default function HomeScreen() {
 
       <Modal visible={isAddOpen} transparent animationType="slide" onRequestClose={() => setIsAddOpen(false)}>
         <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>NEW APPLICATION</Text><Text style={styles.modalTitle}>신청 내역 추가</Text></View><Pressable onPress={() => setIsAddOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>공고 정보를 등록하면 순번과 일정을 한 곳에서 관리할 수 있어요.</Text><Text style={styles.inputLabel}>공고명</Text><TextInput value={draftTitle} onChangeText={setDraftTitle} placeholder="예: 마곡나루 행복주택" placeholderTextColor="#a9b4ae" style={styles.input} /><Text style={styles.inputLabel}>현재 예비순번</Text><TextInput value={draftRank} onChangeText={setDraftRank} keyboardType="number-pad" placeholder="예: 120" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={saveApplication}><Text style={styles.saveButtonText}>신청 내역 저장하기  →</Text></Pressable></View></View>
+      </Modal>
+
+      <Modal visible={isRankOpen} transparent animationType="slide" onRequestClose={() => setIsRankOpen(false)}>
+        <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>UPDATE RANK</Text><Text style={styles.modalTitle}>현재 순번 기록</Text></View><Pressable onPress={() => setIsRankOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>{selected.title}의 공고문이나 대기현황에서 확인한 최신 순번을 입력하세요.</Text><Text style={styles.inputLabel}>현재 예비순번</Text><TextInput value={draftRank} onChangeText={setDraftRank} keyboardType="number-pad" placeholder="예: 24" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Text style={styles.historyTitle}>최근 순번 이력</Text><View style={styles.historyList}>{selected.history.slice(-3).reverse().map((snapshot) => <View key={`${snapshot.recordedAt}-${snapshot.rank}`} style={styles.historyRow}><Text style={styles.historyDate}>{snapshot.recordedAt}</Text><Text style={styles.historyRank}>{snapshot.rank}번</Text></View>)}</View><Pressable style={styles.saveButton} onPress={saveRank}><Text style={styles.saveButtonText}>순번 업데이트 저장  →</Text></Pressable></View></View>
+      </Modal>
+
+      <Modal visible={isNotificationOpen} transparent animationType="slide" onRequestClose={() => setIsNotificationOpen(false)}>
+        <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>NOTIFICATIONS</Text><Text style={styles.modalTitle}>알림 센터</Text></View><Pressable onPress={() => setIsNotificationOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><ScrollView style={styles.notificationList}>{data.notifications.length === 0 ? <Text style={styles.emptyText}>아직 알림이 없어요.</Text> : data.notifications.map((item) => <View key={item.id} style={styles.notificationRow}><View style={styles.notificationIcon}><Text style={styles.tipSpark}>✦</Text></View><View style={styles.notificationCopy}><Text style={styles.notificationTitle}>{item.title}</Text><Text style={styles.notificationBody}>{item.body}</Text><Text style={styles.notificationTime}>{item.createdAt}</Text></View></View>)}</ScrollView><Pressable style={styles.saveButton} onPress={() => { updateData({ ...data, notifications: data.notifications.map((item) => ({ ...item, read: true })) }); setIsNotificationOpen(false); }}><Text style={styles.saveButtonText}>모두 읽음 처리</Text></Pressable></View></View>
       </Modal>
     </View>
   );
@@ -225,6 +269,7 @@ const styles = StyleSheet.create({
   appRankUnit: { fontSize: 9, letterSpacing: 0 },
   upTag: { color: '#4b9b81', backgroundColor: '#edf8f3', fontSize: 9, paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 },
   sameTag: { color: '#a8b1ab', backgroundColor: '#f2f4f2', fontSize: 8, paddingHorizontal: 4, paddingVertical: 3, borderRadius: 4 },
+  appUpdated: { color: '#b0bab4', fontSize: 8, marginTop: 9 },
   lowerHeader: { marginTop: 9, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
   taskCount: { color: '#6aa68e', fontSize: 11, fontWeight: '500', marginLeft: 4 },
   moreText: { color: '#6a9b87', fontSize: 10, fontWeight: '800', paddingBottom: 3 },
@@ -253,6 +298,19 @@ const styles = StyleSheet.create({
   modalCopy: { color: '#8f9e96', fontSize: 11, lineHeight: 18, marginTop: 14, marginBottom: 12 },
   inputLabel: { color: '#61736a', fontSize: 10, fontWeight: '800', marginTop: 13 },
   input: { height: 44, backgroundColor: '#fbfcfb', borderWidth: 1, borderColor: COLORS.line, borderRadius: 10, paddingHorizontal: 12, color: '#52635b', fontSize: 12, marginTop: 7 },
+  historyTitle: { color: '#61736a', fontSize: 10, fontWeight: '800', marginTop: 19 },
+  historyList: { marginTop: 6, backgroundColor: '#f7faf8', borderRadius: 9, paddingHorizontal: 10 },
+  historyRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#eaf0ec' },
+  historyDate: { color: '#9aa9a1', fontSize: 9 },
+  historyRank: { color: '#4b927a', fontSize: 10, fontWeight: '800' },
   saveButton: { height: 47, borderRadius: 11, backgroundColor: '#327e67', alignItems: 'center', justifyContent: 'center', marginTop: 22 },
   saveButtonText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  notificationList: { maxHeight: 330, marginTop: 18 },
+  notificationRow: { flexDirection: 'row', gap: 10, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#eff3f0' },
+  notificationIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: '#e1f2ea', alignItems: 'center', justifyContent: 'center' },
+  notificationCopy: { flex: 1 },
+  notificationTitle: { color: '#4d6258', fontSize: 11, fontWeight: '800' },
+  notificationBody: { color: '#8f9e96', fontSize: 10, lineHeight: 16, marginTop: 3 },
+  notificationTime: { color: '#b1bbb5', fontSize: 8, marginTop: 5 },
+  emptyText: { color: '#9aa9a1', textAlign: 'center', paddingVertical: 35, fontSize: 11 },
 });

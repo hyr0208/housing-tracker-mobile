@@ -1,13 +1,15 @@
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-const items = [
-  ['MN', '마곡나루 행복주택', '행복주택 · 16㎡', '24번', '↓ 7계단', '#ddf1e8'],
-  ['GS', '고양삼송 A-11블록', '국민임대 · 36㎡', '67번', '변동 없음', '#eae8f7'],
-  ['WR', '위례 A2-4블록', '청년 매입임대 · 24㎡', '108번', '↓ 8계단', '#fbe9dc'],
-];
+import { loadAppData, type HousingApplication } from '@/data/storage';
 
 export default function ApplicationsScreen() {
+  const [items, setItems] = useState<HousingApplication[]>([]);
+
+  useEffect(() => {
+    loadAppData().then((data) => setItems(data.applications));
+  }, []);
+
   return (
     <View style={styles.screen}>
       <SafeAreaView style={styles.safe} edges={['top']}>
@@ -15,8 +17,8 @@ export default function ApplicationsScreen() {
           <Text style={styles.eyebrow}>MY APPLICATIONS</Text>
           <Text style={styles.title}>내 신청내역</Text>
           <Text style={styles.subtitle}>내가 기다리고 있는 주거 기회를 한 곳에서 관리해요.</Text>
-          <Pressable style={styles.filter}><Text style={styles.filterText}>전체 신청 3건</Text><Text style={styles.chevron}>⌄</Text></Pressable>
-          {items.map(([initials, title, type, rank, change, color]) => <Pressable key={title} style={styles.card}><View style={[styles.icon, { backgroundColor: color }]}><Text style={styles.iconText}>{initials}</Text></View><View style={styles.cardBody}><Text style={styles.cardTitle}>{title}</Text><Text style={styles.cardMeta}>{type}</Text><Text style={styles.cardMeta}>서울·경기 공공주택</Text><View style={styles.bottom}><Text style={styles.rank}>{rank}</Text><Text style={change.startsWith('↓') ? styles.up : styles.same}>{change}</Text><Text style={styles.updated}>오늘 확인</Text></View></View><Text style={styles.arrow}>›</Text></Pressable>)}
+          <Pressable style={styles.filter}><Text style={styles.filterText}>전체 신청 {items.length}건</Text><Text style={styles.chevron}>⌄</Text></Pressable>
+          {items.map((item) => <Pressable key={item.id} style={styles.card}><View style={[styles.icon, { backgroundColor: item.color }]}><Text style={styles.iconText}>{item.initials}</Text></View><View style={styles.cardBody}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.cardMeta}>{item.type}</Text><Text style={styles.cardMeta}>{item.area}</Text><View style={styles.bottom}><Text style={styles.rank}>{item.rank}번</Text><Text style={item.rank < item.previousRank ? styles.up : styles.same}>{item.rank < item.previousRank ? `↓ ${item.previousRank - item.rank}계단` : '변동 없음'}</Text><Text style={styles.updated}>{item.updatedAt}</Text></View></View><Text style={styles.arrow}>›</Text></Pressable>)}
           <View style={styles.tip}><Text style={styles.tipIcon}>✦</Text><View><Text style={styles.tipTitle}>신청 내역을 추가해보세요</Text><Text style={styles.tipText}>공고 URL을 등록하면 순번 변동을 놓치지 않아요.</Text></View></View>
         </ScrollView>
       </SafeAreaView>
