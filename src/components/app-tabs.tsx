@@ -10,8 +10,11 @@ export default function AppTabs() {
   return (
     <NativeTabs
       backgroundColor="#fbfdfb"
-      tintColor="#3b987b"
+      blurEffect="none"
+      disableTransparentOnScrollEdge
+      iconColor={{ default: '#91a099', selected: '#2f8067' }}
       indicatorColor="#d9efe5"
+      shadowColor="#dfe9e3"
       labelStyle={{ selected: { color: '#2f8067' }, default: { color: '#91a099' } }}>
       <NativeTabs.Trigger name="index">
           <NativeTabs.Trigger.Label>홈</NativeTabs.Trigger.Label>
