@@ -5,6 +5,11 @@ export type RankSnapshot = {
   recordedAt: string;
 };
 
+export type PublicWaitBreakdown = {
+  label: string;
+  count: number;
+};
+
 export type HousingApplication = {
   id: string;
   title: string;
@@ -21,10 +26,13 @@ export type HousingApplication = {
   signguCode?: string;
   suplyTy?: string;
   houseTy?: string;
+  housingType?: string;
   publicWaitCount?: number;
+  publicWaitBreakdown?: PublicWaitBreakdown[];
   publicWaitPreviousCount?: number;
   publicWaitUpdatedAt?: string;
   syncStatus?: 'synced' | 'no_match' | 'error';
+  syncMessage?: string;
 };
 
 export type ChecklistTask = {

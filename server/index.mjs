@@ -58,16 +58,31 @@ async function syncApplication(application) {
   const incoming = Object.fromEntries(Object.entries(application).filter(([, value]) => value !== undefined));
   const current = state.applications[application.id] ?? incoming;
   const rows = await fetchWaitingRows(incoming);
+  const allMatches = findMatchingRows(rows, { ...incoming, housingType: undefined });
   const matches = findMatchingRows(rows, incoming);
 
   if (matches.length === 0) {
     state.applications[application.id] = { ...current, ...incoming, status: 'no_match', checkedAt: new Date().toISOString() };
     await writeState(state);
-    return { id: application.id, status: 'no_match', matches: [] };
+    return {
+      id: application.id,
+      status: 'no_match',
+      matches: [],
+      message: allMatches.length > 0
+        ? '단지는 찾았지만 등록한 주택형의 공개 현황이 없어요. 주택형 표기를 확인해주세요.'
+        : '공개 대기현황 API에서 일치하는 단지를 찾지 못했어요. 공식 단지명을 확인해주세요.',
+    };
   }
 
   const row = matches[0];
   const nextWaitCount = Number(row.waitCo ?? 0);
+  const publicWaitBreakdown = allMatches.reduce((groups, item) => {
+    const label = item.drwtUnit || item.styleNm || '주택형 미상';
+    const existing = groups.find((group) => group.label === label);
+    if (existing) existing.count += Number(item.waitCo ?? 0);
+    else groups.push({ label, count: Number(item.waitCo ?? 0) });
+    return groups;
+  }, []);
   const previousWaitCount = current.publicWaitCount;
   const changed = typeof previousWaitCount === 'number' && previousWaitCount !== nextWaitCount;
   const next = {
@@ -75,6 +90,7 @@ async function syncApplication(application) {
     ...incoming,
     status: 'synced',
     publicWaitCount: nextWaitCount,
+    publicWaitBreakdown,
     publicWaitPreviousCount: previousWaitCount,
     publicWaitUpdatedAt: new Date().toISOString(),
     checkedAt: new Date().toISOString(),
@@ -87,7 +103,7 @@ async function syncApplication(application) {
     await sendExpoPush(incoming.pushToken, `${row.hsmpNm} 공개 대기현황 변동`, `대기인원이 ${previousWaitCount}명에서 ${nextWaitCount}명으로 변경됐어요.`);
   }
 
-  return { id: application.id, status: 'synced', changed, publicWaitCount: nextWaitCount, previousWaitCount, matched: row };
+  return { id: application.id, status: 'synced', changed, publicWaitCount: nextWaitCount, previousWaitCount, publicWaitBreakdown, matched: row };
 }
 
 async function syncAll() {

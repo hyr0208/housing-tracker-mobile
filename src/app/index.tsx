@@ -74,6 +74,7 @@ export default function HomeScreen() {
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [isReady, setIsReady] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [editingApplicationId, setEditingApplicationId] = useState<string | undefined>();
   const [isRankOpen, setIsRankOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -81,6 +82,7 @@ export default function HomeScreen() {
   const [draftRank, setDraftRank] = useState('');
   const [draftComplexName, setDraftComplexName] = useState('');
   const [draftArea, setDraftArea] = useState('');
+  const [draftHousingType, setDraftHousingType] = useState('');
   const [draftProfileName, setDraftProfileName] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [isKakaoLoading, setIsKakaoLoading] = useState(false);
@@ -147,13 +149,16 @@ export default function HomeScreen() {
     void saveAppData(next);
   };
 
-  const runPublicSync = async (application: HousingApplication, token = pushTokenRef.current) => {
+  const runPublicSync = async (application: HousingApplication, token = pushTokenRef.current, showFailureAlert = false) => {
     setIsSyncing(true);
     const result = await syncPublicWait(application, token);
     setIsSyncing(false);
     if (!result) return;
 
-    const updated = { ...application, syncStatus: result.status, publicWaitCount: result.publicWaitCount, publicWaitPreviousCount: result.previousWaitCount, publicWaitUpdatedAt: result.checkedAt, updatedAt: '방금 전' };
+    if (showFailureAlert && (result.status === 'error' || result.status === 'no_match')) {
+      Alert.alert(result.status === 'no_match' ? '단지를 찾지 못했어요' : '공개 대기현황 조회 실패', result.message || '잠시 후 다시 확인해주세요.');
+    }
+
     let changeNotification: AppNotification | undefined;
     if (result.changed && typeof result.publicWaitCount === 'number' && typeof result.previousWaitCount === 'number') {
       const title = `${application.complexName} 공개 대기현황 변동`;
@@ -170,7 +175,16 @@ export default function HomeScreen() {
     setData((current) => {
       const next = {
         ...current,
-        applications: current.applications.map((item) => item.id === application.id ? updated : item),
+        applications: current.applications.map((item) => item.id === application.id ? {
+          ...item,
+          syncStatus: result.status,
+          publicWaitCount: result.publicWaitCount,
+          publicWaitBreakdown: result.publicWaitBreakdown,
+          publicWaitPreviousCount: result.previousWaitCount,
+          publicWaitUpdatedAt: result.checkedAt,
+          syncMessage: result.message,
+          updatedAt: '방금 전',
+        } : item),
         notifications: changeNotification ? [changeNotification, ...current.notifications] : current.notifications,
       };
       void saveAppData(next);
@@ -186,6 +200,45 @@ export default function HomeScreen() {
     updateData({ ...data, tasks: tasks.map((task) => task.id === id ? { ...task, done: !task.done } : task) });
   };
 
+  const openAddApplication = () => {
+    setEditingApplicationId(undefined);
+    setDraftTitle('');
+    setDraftRank('');
+    setDraftComplexName('');
+    setDraftArea('');
+    setDraftHousingType('');
+    setIsAddOpen(true);
+  };
+
+  const openEditApplication = (application: HousingApplication) => {
+    setEditingApplicationId(application.id);
+    setDraftTitle(application.title);
+    setDraftRank(String(application.rank));
+    setDraftComplexName(application.complexName ?? '');
+    setDraftArea(application.area);
+    setDraftHousingType(application.housingType ?? '');
+    setIsAddOpen(true);
+  };
+
+  const deleteApplication = (applicationId: string) => {
+    const application = applications.find((item) => item.id === applicationId);
+    if (!application) return;
+    Alert.alert('신청 내역 삭제', `${application.title} 내역을 삭제할까요?`, [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: () => {
+          const remaining = applications.filter((item) => item.id !== applicationId);
+          updateData({ ...data, applications: remaining });
+          setSelectedId(remaining[0]?.id);
+          setEditingApplicationId(undefined);
+          setIsAddOpen(false);
+        },
+      },
+    ]);
+  };
+
   const saveApplication = () => {
     if (!isLoggedIn) {
       setIsProfileOpen(true);
@@ -194,10 +247,28 @@ export default function HomeScreen() {
     const title = draftTitle.trim();
     const rank = Number(draftRank);
     if (!title || !Number.isFinite(rank) || rank < 1) return;
-    const now = new Date().toISOString().slice(0, 10);
     const complexName = draftComplexName.trim() || title;
     const area = draftArea.trim() || '지역 미등록';
+    const housingType = draftHousingType.trim() || undefined;
     const brtcCode = area.startsWith('서울') ? '11' : area.startsWith('부산') ? '26' : area.startsWith('대구') ? '27' : area.startsWith('인천') ? '28' : area.startsWith('광주') ? '29' : area.startsWith('대전') ? '30' : area.startsWith('울산') ? '31' : area.startsWith('세종') ? '36' : area.startsWith('경기') ? '41' : area.startsWith('강원') ? '42' : area.startsWith('충북') ? '43' : area.startsWith('충남') ? '44' : area.startsWith('전북') ? '45' : area.startsWith('전남') ? '46' : area.startsWith('경북') ? '47' : area.startsWith('경남') ? '48' : area.startsWith('제주') ? '50' : undefined;
+    if (editingApplicationId) {
+      const next = {
+        ...data,
+        applications: applications.map((item) => item.id === editingApplicationId ? {
+          ...item,
+          title,
+          area,
+          complexName,
+          brtcCode,
+          housingType,
+          initials: title.replace(/\s/g, '').slice(0, 2).toUpperCase(),
+          updatedAt: '방금 전',
+        } : item),
+      };
+      updateData(next);
+      setSelectedId(editingApplicationId);
+    } else {
+      const now = new Date().toISOString().slice(0, 10);
     const newApplication: HousingApplication = {
       id: `application-${Date.now()}`,
       title,
@@ -211,14 +282,18 @@ export default function HomeScreen() {
       history: [{ rank, recordedAt: now }],
       complexName,
       brtcCode,
+      housingType,
     };
     const next = { ...data, applications: [...applications, newApplication], notifications: [makeNotification('신청 내역을 저장했어요', `${title} ${rank}번을 기록했습니다.`), ...data.notifications] };
     updateData(next);
     setSelectedId(newApplication.id);
+    }
     setDraftTitle('');
     setDraftRank('');
     setDraftComplexName('');
     setDraftArea('');
+    setDraftHousingType('');
+    setEditingApplicationId(undefined);
     setIsAddOpen(false);
   };
 
@@ -279,11 +354,12 @@ export default function HomeScreen() {
             <View style={styles.publicCopy}>
               <Text style={styles.cardEyebrow}>PUBLIC WAITING STATUS</Text>
               <Text style={styles.publicTitle}>공개 대기현황</Text>
-              <Text style={styles.publicSub}>{selected.syncStatus === 'no_match' ? '단지명을 공식 표기와 맞춰주세요.' : selected.syncStatus === 'error' ? '서버 연결을 확인해주세요.' : selected.publicWaitCount !== undefined ? `현재 공개 대기인원 ${selected.publicWaitCount}명` : '자동 조회를 준비하고 있어요.'}</Text>
+              <Text style={styles.publicSub}>{isSyncing ? '마이홈 공개 현황을 확인하고 있어요…' : selected.syncMessage || (selected.housingType && selected.publicWaitCount !== undefined ? `${selected.housingType}형 현재 대기인원 ${selected.publicWaitCount}명` : selected.publicWaitBreakdown?.length ? '주택형을 선택하면 정확한 대기인원을 보여줘요.' : '자동 조회를 준비하고 있어요.')}</Text>
+              {selected.publicWaitBreakdown && <View style={styles.breakdownList}>{selected.publicWaitBreakdown.map((item) => <View key={item.label} style={[styles.breakdownChip, selected.housingType === item.label && styles.breakdownChipSelected]}><Text style={styles.breakdownLabel}>{item.label}</Text><Text style={styles.breakdownCount}>{item.count}명</Text></View>)}</View>}
               {selected.syncStatus === 'synced' && <Text style={styles.autoSyncText}>● 서버가 주기적으로 확인해요</Text>}
               {selected.publicWaitUpdatedAt && <Text style={styles.publicTime}>마지막 확인 {new Date(selected.publicWaitUpdatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text>}
             </View>
-            <Pressable style={styles.syncButton} onPress={() => void runPublicSync(selected)} disabled={isSyncing}><Text style={styles.syncButtonText}>{isSyncing ? '확인 중' : '지금 확인'}</Text></Pressable>
+            <Pressable style={styles.syncButton} onPress={() => void runPublicSync(selected, pushTokenRef.current, true)} disabled={isSyncing}><Text style={styles.syncButtonText}>{isSyncing ? '확인 중' : '지금 확인'}</Text></Pressable>
           </View>
 
           <View style={styles.progressCard}>
@@ -291,9 +367,9 @@ export default function HomeScreen() {
             <View style={styles.progressRow}><View style={styles.progressRing}><View style={styles.ringInner}><Text style={styles.ringNumber}>{completed}/{tasks.length}</Text><Text style={styles.ringLabel}>단계 완료</Text></View></View><View style={styles.progressCopy}><Text style={styles.progressStrong}>{tasks.length ? '잘하고 있어요!' : '준비할 일을 추가해보세요'}</Text><Text style={styles.progressSub}>{tasks.length ? <>서류 준비를 마치면{`\n`}거의 다 왔어요.</> : '신청 내역에 맞는 체크리스트를 만들어보세요.'}</Text><Pressable><Text style={styles.checklistLink}>체크리스트 열기  →</Text></Pressable></View></View>
           </View>
 
-          <View style={styles.sectionHeader}><View><Text style={styles.cardEyebrow}>MY APPLICATIONS</Text><Text style={styles.sectionTitle}>내 신청 현황 <Text style={styles.countPill}>{applications.length}</Text></Text></View><Pressable onPress={() => setIsAddOpen(true)} style={styles.addSmall}><Text style={styles.addSmallText}>＋ 추가</Text></Pressable></View>
+          <View style={styles.sectionHeader}><View><Text style={styles.cardEyebrow}>MY APPLICATIONS</Text><Text style={styles.sectionTitle}>내 신청 현황 <Text style={styles.countPill}>{applications.length}</Text></Text></View><Pressable onPress={openAddApplication} style={styles.addSmall}><Text style={styles.addSmallText}>＋ 추가</Text></Pressable></View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.applicationList}>
-            {applications.map((item) => <Pressable key={item.id} onPress={() => setSelectedId(item.id)} style={[styles.applicationCard, selectedId === item.id && styles.applicationSelected]}><View style={[styles.appIcon, { backgroundColor: item.color }]}><Text style={styles.appInitials}>{item.initials}</Text></View><Text style={styles.appTitle} numberOfLines={1}>{item.title}</Text><Text style={styles.appMeta}>{item.type}</Text><View style={styles.appRankLine}><Text style={styles.appRank}>{item.rank}<Text style={styles.appRankUnit}>번</Text></Text>{item.rank !== item.previousRank ? <Text style={styles.upTag}>↓ {item.previousRank - item.rank}</Text> : <Text style={styles.sameTag}>변동 없음</Text>}</View><Text style={styles.appUpdated}>{item.updatedAt}</Text></Pressable>)}
+            {applications.map((item) => <Pressable key={item.id} onPress={() => setSelectedId(item.id)} style={[styles.applicationCard, selectedId === item.id && styles.applicationSelected]}><View style={styles.applicationCardHeader}><View style={[styles.appIcon, { backgroundColor: item.color }]}><Text style={styles.appInitials}>{item.initials}</Text></View><Pressable style={styles.editApplicationButton} onPress={() => openEditApplication(item)}><Text style={styles.editApplicationText}>수정</Text></Pressable></View><Text style={styles.appTitle} numberOfLines={1}>{item.title}</Text><Text style={styles.appMeta}>{item.type}</Text><View style={styles.appRankLine}><Text style={styles.appRank}>{item.rank}<Text style={styles.appRankUnit}>번</Text></Text>{item.rank !== item.previousRank ? <Text style={styles.upTag}>↓ {item.previousRank - item.rank}</Text> : <Text style={styles.sameTag}>변동 없음</Text>}</View><Text style={styles.appUpdated}>{item.updatedAt}</Text></Pressable>)}
           </ScrollView>
 
           <View style={styles.lowerHeader}><View><Text style={styles.cardEyebrow}>NEXT STEPS</Text><Text style={styles.sectionTitle}>준비할 일 <Text style={styles.taskCount}>{completed}/{tasks.length}</Text></Text></View><Pressable onPress={() => updateData({ ...data, tasks: [...tasks, { id: `task-${Date.now()}`, title: '이사 예상 비용 계산하기', detail: '전체 신청 · 아직 시작하지 않음', done: false }] })}><Text style={styles.moreText}>할 일 추가  ＋</Text></Pressable></View>
@@ -310,7 +386,31 @@ export default function HomeScreen() {
       </SafeAreaView>
 
       <Modal visible={isAddOpen} transparent animationType="slide" onRequestClose={() => setIsAddOpen(false)}>
-        <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>NEW APPLICATION</Text><Text style={styles.modalTitle}>신청 내역 추가</Text></View><Pressable onPress={() => setIsAddOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>공고 정보를 등록하면 순번과 공개 대기현황을 한 곳에서 관리할 수 있어요.</Text><Text style={styles.inputLabel}>공고명</Text><TextInput value={draftTitle} onChangeText={setDraftTitle} placeholder="예: 행복주택 공고명" placeholderTextColor="#a9b4ae" style={styles.input} /><Text style={styles.inputLabel}>공식 단지명</Text><TextInput value={draftComplexName} onChangeText={setDraftComplexName} placeholder="예: 단지 공식 명칭" placeholderTextColor="#a9b4ae" style={styles.input} /><Text style={styles.inputLabel}>지역</Text><TextInput value={draftArea} onChangeText={setDraftArea} placeholder="예: 서울 강서구" placeholderTextColor="#a9b4ae" style={styles.input} /><Text style={styles.inputLabel}>현재 예비순번</Text><TextInput value={draftRank} onChangeText={setDraftRank} keyboardType="number-pad" placeholder="예: 120" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={saveApplication}><Text style={styles.saveButtonText}>신청 내역 저장하기  →</Text></Pressable></View></View>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.cardEyebrow}>{editingApplicationId ? 'EDIT APPLICATION' : 'NEW APPLICATION'}</Text>
+                <Text style={styles.modalTitle}>{editingApplicationId ? '신청 내역 수정' : '신청 내역 추가'}</Text>
+              </View>
+              <Pressable onPress={() => setIsAddOpen(false)}><Text style={styles.closeText}>×</Text></Pressable>
+            </View>
+            <Text style={styles.modalCopy}>공고 정보와 공식 단지명을 수정할 수 있어요. 예비순번은 이력 보존을 위해 별도로 관리해요.</Text>
+            <Text style={styles.inputLabel}>공고명</Text>
+            <TextInput value={draftTitle} onChangeText={setDraftTitle} placeholder="예: 행복주택 공고명" placeholderTextColor="#a9b4ae" style={styles.input} />
+            <Text style={styles.inputLabel}>공식 단지명</Text>
+            <TextInput value={draftComplexName} onChangeText={setDraftComplexName} placeholder="예: 단지 공식 명칭" placeholderTextColor="#a9b4ae" style={styles.input} />
+            <Text style={styles.inputLabel}>지역</Text>
+            <TextInput value={draftArea} onChangeText={setDraftArea} placeholder="예: 서울 강서구" placeholderTextColor="#a9b4ae" style={styles.input} />
+            <Text style={styles.inputLabel}>주택형 (선택)</Text>
+            <TextInput value={draftHousingType} onChangeText={setDraftHousingType} placeholder="예: 21A 또는 26A" placeholderTextColor="#a9b4ae" style={styles.input} />
+            <Text style={styles.inputLabel}>현재 예비순번</Text>
+            <TextInput value={draftRank} onChangeText={setDraftRank} editable={!editingApplicationId} keyboardType="number-pad" placeholder="예: 120" placeholderTextColor="#a9b4ae" style={[styles.input, editingApplicationId && styles.inputDisabled]} />
+            {editingApplicationId && <Text style={styles.inputHint}>순번을 바꾸려면 홈 카드의 ‘순번 업데이트’를 이용해주세요.</Text>}
+            <Pressable style={styles.saveButton} onPress={saveApplication}><Text style={styles.saveButtonText}>{editingApplicationId ? '변경사항 저장하기  →' : '신청 내역 저장하기  →'}</Text></Pressable>
+            {editingApplicationId && <Pressable style={styles.deleteButton} onPress={() => deleteApplication(editingApplicationId)}><Text style={styles.deleteButtonText}>이 신청 내역 삭제하기</Text></Pressable>}
+          </View>
+        </View>
       </Modal>
 
       {selected && <Modal visible={isRankOpen} transparent animationType="slide" onRequestClose={() => setIsRankOpen(false)}>
@@ -374,6 +474,11 @@ const styles = StyleSheet.create({
   publicCopy: { flex: 1, paddingRight: 10 },
   publicTitle: { color: '#3e5d50', fontSize: 15, fontWeight: '800', marginTop: 5 },
   publicSub: { color: '#82968b', fontSize: 10, marginTop: 5, lineHeight: 15 },
+  breakdownList: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 9 },
+  breakdownChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#f0f7f3', borderRadius: 7, paddingHorizontal: 6, paddingVertical: 4 },
+  breakdownChipSelected: { backgroundColor: '#d5eee2' },
+  breakdownLabel: { color: '#6b8c7d', fontSize: 9, fontWeight: '700' },
+  breakdownCount: { color: '#39836b', fontSize: 9, fontWeight: '800' },
   autoSyncText: { color: '#4b9b81', fontSize: 8, marginTop: 6, fontWeight: '700' },
   publicTime: { color: '#a5b2aa', fontSize: 8, marginTop: 5 },
   syncButton: { backgroundColor: '#e0f1e8', borderRadius: 9, paddingHorizontal: 11, paddingVertical: 9 },
@@ -418,6 +523,9 @@ const styles = StyleSheet.create({
   applicationList: { gap: 10, paddingHorizontal: 22, paddingVertical: 16 },
   applicationCard: { width: 174, backgroundColor: '#fff', borderRadius: 15, borderWidth: 1, borderColor: COLORS.line, padding: 13 },
   applicationSelected: { borderColor: '#8fcab3', borderWidth: 2, padding: 12 },
+  applicationCardHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  editApplicationButton: { paddingHorizontal: 7, paddingVertical: 4, borderRadius: 6, backgroundColor: '#eef7f2' },
+  editApplicationText: { color: '#4b987e', fontSize: 9, fontWeight: '800' },
   appIcon: { width: 35, height: 35, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   appInitials: { color: '#5a947e', fontSize: 10, fontWeight: '700' },
   appTitle: { color: '#405149', fontSize: 11, fontWeight: '800', marginTop: 11 },
@@ -456,6 +564,8 @@ const styles = StyleSheet.create({
   modalCopy: { color: '#8f9e96', fontSize: 11, lineHeight: 18, marginTop: 14, marginBottom: 12 },
   inputLabel: { color: '#61736a', fontSize: 10, fontWeight: '800', marginTop: 13 },
   input: { height: 44, backgroundColor: '#fbfcfb', borderWidth: 1, borderColor: COLORS.line, borderRadius: 10, paddingHorizontal: 12, color: '#52635b', fontSize: 12, marginTop: 7 },
+  inputDisabled: { backgroundColor: '#f0f4f1', color: '#99a69f' },
+  inputHint: { color: '#9aa9a1', fontSize: 9, marginTop: 6 },
   historyTitle: { color: '#61736a', fontSize: 10, fontWeight: '800', marginTop: 19 },
   historyList: { marginTop: 6, backgroundColor: '#f7faf8', borderRadius: 9, paddingHorizontal: 10 },
   historyRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#eaf0ec' },
@@ -463,6 +573,8 @@ const styles = StyleSheet.create({
   historyRank: { color: '#4b927a', fontSize: 10, fontWeight: '800' },
   saveButton: { height: 47, borderRadius: 11, backgroundColor: '#327e67', alignItems: 'center', justifyContent: 'center', marginTop: 22 },
   saveButtonText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  deleteButton: { height: 43, borderRadius: 11, borderWidth: 1, borderColor: '#f0cfc7', alignItems: 'center', justifyContent: 'center', marginTop: 9 },
+  deleteButtonText: { color: '#d47d6c', fontSize: 11, fontWeight: '800' },
   notificationList: { maxHeight: 330, marginTop: 18 },
   notificationRow: { flexDirection: 'row', gap: 10, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#eff3f0' },
   notificationIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: '#e1f2ea', alignItems: 'center', justifyContent: 'center' },

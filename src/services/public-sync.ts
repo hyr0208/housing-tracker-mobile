@@ -1,15 +1,31 @@
-import type { HousingApplication } from '@/data/storage';
+import type { HousingApplication, PublicWaitBreakdown } from '@/data/storage';
 
 export type PublicWaitSyncResult = {
   status: 'synced' | 'no_match' | 'error';
   changed?: boolean;
   publicWaitCount?: number;
   previousWaitCount?: number;
+  publicWaitBreakdown?: PublicWaitBreakdown[];
   checkedAt?: string;
   message?: string;
 };
 
 const syncServerUrl = (process.env.EXPO_PUBLIC_SYNC_SERVER_URL || 'http://127.0.0.1:8787').replace(/\/$/, '');
+
+async function fetchWithTimeout(input: RequestInfo, init: RequestInit, timeoutMs = 90000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('공개 현황 조회가 오래 걸려 중단했어요. 잠시 후 다시 시도해주세요.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 function toServerApplication(application: HousingApplication, pushToken?: string) {
   return {
@@ -19,6 +35,7 @@ function toServerApplication(application: HousingApplication, pushToken?: string
     signguCode: application.signguCode,
     suplyTy: application.suplyTy,
     houseTy: application.houseTy,
+    housingType: application.housingType,
     ...(pushToken ? { pushToken } : {}),
   };
 }
@@ -27,7 +44,7 @@ export async function syncPublicWait(application: HousingApplication, pushToken?
   if (!application.complexName || !application.brtcCode) return null;
 
   try {
-    const response = await fetch(`${syncServerUrl}/api/sync`, {
+    const response = await fetchWithTimeout(`${syncServerUrl}/api/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(toServerApplication(application, pushToken)),
