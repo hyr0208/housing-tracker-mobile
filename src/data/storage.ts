@@ -16,6 +16,15 @@ export type HousingApplication = {
   initials: string;
   updatedAt: string;
   history: RankSnapshot[];
+  complexName?: string;
+  brtcCode?: string;
+  signguCode?: string;
+  suplyTy?: string;
+  houseTy?: string;
+  publicWaitCount?: number;
+  publicWaitPreviousCount?: number;
+  publicWaitUpdatedAt?: string;
+  syncStatus?: 'synced' | 'no_match' | 'error';
 };
 
 export type ChecklistTask = {
@@ -33,40 +42,53 @@ export type AppNotification = {
   read: boolean;
 };
 
+export type UserProfile = {
+  provider: 'kakao';
+  id: string;
+  nickname: string;
+  loggedInAt: string;
+};
+
 export type AppData = {
   applications: HousingApplication[];
   tasks: ChecklistTask[];
   notifications: AppNotification[];
+  pushToken?: string;
+  profileName?: string;
+  profile?: UserProfile;
 };
 
 const STORAGE_KEY = '@housing-tracker/app-data-v1';
+const profileListeners = new Set<(profile?: UserProfile) => void>();
+
+export function subscribeToProfile(listener: (profile?: UserProfile) => void) {
+  profileListeners.add(listener);
+  return () => { profileListeners.delete(listener); };
+}
 
 export const defaultAppData: AppData = {
-  applications: [
-    { id: 'magok', title: '마곡나루 행복주택', type: '행복주택 · 16㎡', area: '서울 강서구', rank: 24, previousRank: 31, color: '#ddf1e8', initials: 'MN', updatedAt: '오늘 오전 9:42', history: [{ rank: 31, recordedAt: '2026-08-15' }, { rank: 28, recordedAt: '2026-08-18' }, { rank: 24, recordedAt: '2026-08-21' }] },
-    { id: 'samseong', title: '고양삼송 A-11블록', type: '국민임대 · 36㎡', area: '경기 고양시', rank: 67, previousRank: 67, color: '#eae8f7', initials: 'GS', updatedAt: '어제 오후 4:10', history: [{ rank: 67, recordedAt: '2026-08-20' }] },
-    { id: 'wirye', title: '위례 A2-4블록', type: '청년 매입임대 · 24㎡', area: '서울 송파구', rank: 108, previousRank: 116, color: '#fbe9dc', initials: 'WR', updatedAt: '8월 18일', history: [{ rank: 116, recordedAt: '2026-08-12' }, { rank: 108, recordedAt: '2026-08-18' }] },
-  ],
-  tasks: [
-    { id: 'resident-doc', title: '주민등록등본 발급하기', detail: '마곡나루 · 이번 주 금요일까지', done: false },
-    { id: 'deposit-plan', title: '보증금 마련 계획 확인하기', detail: '순번 20번대 진입', done: false },
-    { id: 'notice-check', title: '고양삼송 공고문 다시 확인하기', detail: '어제 추가 공지', done: true },
-  ],
-  notifications: [
-    { id: 'welcome', title: '내 차례에 오신 것을 환영해요', body: '신청내역을 등록하면 순번 변동을 기록할 수 있어요.', createdAt: '오늘 오전 9:42', read: false },
-    { id: 'magok-rank', title: '마곡나루 순번이 상승했어요', body: '31번에서 24번으로 7계단 가까워졌어요.', createdAt: '8월 21일 오전 9:42', read: false },
-  ],
+  applications: [],
+  tasks: [],
+  notifications: [],
 };
+
+const LEGACY_DEMO_APPLICATION_IDS = new Set(['magok', 'samseong', 'wirye']);
+const LEGACY_DEMO_TASK_IDS = new Set(['resident-doc', 'deposit-plan', 'notice-check']);
+const LEGACY_DEMO_NOTIFICATION_IDS = new Set(['welcome', 'magok-rank']);
 
 export async function loadAppData(): Promise<AppData> {
   try {
     const stored = await AsyncStorage.getItem(STORAGE_KEY);
     if (!stored) return defaultAppData;
     const parsed = JSON.parse(stored) as Partial<AppData>;
+    const applications = (parsed.applications ?? []).filter((application) => !LEGACY_DEMO_APPLICATION_IDS.has(application.id));
     return {
-      applications: parsed.applications ?? defaultAppData.applications,
-      tasks: parsed.tasks ?? defaultAppData.tasks,
-      notifications: parsed.notifications ?? defaultAppData.notifications,
+      applications,
+      tasks: (parsed.tasks ?? []).filter((task) => !LEGACY_DEMO_TASK_IDS.has(task.id)),
+      notifications: (parsed.notifications ?? []).filter((notification) => !LEGACY_DEMO_NOTIFICATION_IDS.has(notification.id)),
+      pushToken: parsed.pushToken,
+      profileName: parsed.profileName,
+      profile: parsed.profile,
     };
   } catch {
     return defaultAppData;
@@ -75,6 +97,7 @@ export async function loadAppData(): Promise<AppData> {
 
 export async function saveAppData(data: AppData) {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  profileListeners.forEach((listener) => listener(data.profile));
 }
 
 export function makeNotification(title: string, body: string): AppNotification {

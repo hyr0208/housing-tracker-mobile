@@ -2,13 +2,41 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { loadAppData, type HousingApplication } from '@/data/storage';
+import { useRouter } from 'expo-router';
 
 export default function ApplicationsScreen() {
   const [items, setItems] = useState<HousingApplication[]>([]);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
-    loadAppData().then((data) => setItems(data.applications));
+    loadAppData().then((data) => {
+      setIsLoggedIn(Boolean(data.profile));
+      setItems(data.applications);
+    });
   }, []);
+
+  if (!isLoggedIn) {
+    return (
+      <View style={styles.screen}>
+        <SafeAreaView style={styles.safe} edges={['top']}>
+          <View style={styles.loginGate}>
+            <Text style={styles.eyebrow}>MY APPLICATIONS</Text>
+            <Text style={styles.title}>내 신청내역</Text>
+            <Text style={styles.subtitle}>로그인하면 내 신청 정보와 순번 변동을 안전하게 관리할 수 있어요.</Text>
+            <View style={styles.loginGateCard}>
+              <Text style={styles.loginGateIcon}>♧</Text>
+              <Text style={styles.loginGateTitle}>내 정보부터 연결해 주세요</Text>
+              <Text style={styles.loginGateText}>카카오 로그인 후 신청 내역을 등록하고 알림을 받을 수 있어요.</Text>
+              <Pressable style={styles.loginGateButton} onPress={() => router.replace('/')}>
+                <Text style={styles.loginGateButtonText}>홈에서 로그인하기  →</Text>
+              </Pressable>
+            </View>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -30,6 +58,13 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f4f7f3' },
   safe: { flex: 1 },
   content: { paddingHorizontal: 22, paddingTop: 26, paddingBottom: 100 },
+  loginGate: { paddingHorizontal: 22, paddingTop: 26 },
+  loginGateCard: { marginTop: 30, padding: 22, borderRadius: 20, backgroundColor: '#e6f3ed', alignItems: 'center' },
+  loginGateIcon: { color: '#4a9279', fontSize: 28 },
+  loginGateTitle: { color: '#315b4c', fontSize: 17, fontWeight: '800', marginTop: 13 },
+  loginGateText: { color: '#78968a', fontSize: 11, lineHeight: 18, textAlign: 'center', marginTop: 8 },
+  loginGateButton: { width: '100%', height: 46, borderRadius: 11, backgroundColor: '#d8eee3', alignItems: 'center', justifyContent: 'center', marginTop: 18 },
+  loginGateButtonText: { color: '#438d75', fontSize: 11, fontWeight: '800' },
   eyebrow: { color: '#9aa9a1', fontSize: 9, fontWeight: '800', letterSpacing: 1.2 },
   title: { color: '#243b34', fontSize: 29, fontWeight: '800', letterSpacing: -1.4, marginTop: 9 },
   subtitle: { color: '#8c9c94', fontSize: 12, marginTop: 7 },

@@ -1,11 +1,19 @@
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
+import { loadAppData, subscribeToProfile } from '@/data/storage';
 
 export default function AppTabs() {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    loadAppData().then((data) => setIsLoggedIn(Boolean(data.profile)));
+    return subscribeToProfile((profile) => setIsLoggedIn(Boolean(profile)));
+  }, []);
 
   return (
     <NativeTabs
@@ -24,13 +32,13 @@ export default function AppTabs() {
         />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="explore">
+      {isLoggedIn && <NativeTabs.Trigger name="explore">
           <NativeTabs.Trigger.Label>내 신청</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           src={require('@/assets/images/tabIcons/explore.png')}
           renderingMode="template"
         />
-      </NativeTabs.Trigger>
+      </NativeTabs.Trigger>}
     </NativeTabs>
   );
 }
