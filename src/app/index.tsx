@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import {
   defaultAppData,
   loadAppData,
@@ -75,6 +76,7 @@ function formatHousingType(label?: string) {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [data, setData] = useState<AppData>(defaultAppData);
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [isReady, setIsReady] = useState(false);
@@ -380,7 +382,7 @@ export default function HomeScreen() {
 
           <View style={styles.progressCard}>
             <View style={styles.progressTop}><View><Text style={styles.cardEyebrow}>MY PROGRESS</Text><Text style={styles.cardTitle}>입주 준비도</Text></View><Text style={styles.progressPercent}>{progressPercent}%</Text></View>
-            <View style={styles.progressRow}><View style={styles.progressRing}><View style={styles.ringInner}><Text style={styles.ringNumber}>{completed}/{tasks.length}</Text><Text style={styles.ringLabel}>단계 완료</Text></View></View><View style={styles.progressCopy}><Text style={styles.progressStrong}>{tasks.length ? '잘하고 있어요!' : '준비할 일을 추가해보세요'}</Text><Text style={styles.progressSub}>{tasks.length ? <>서류 준비를 마치면{`\n`}거의 다 왔어요.</> : '신청 내역에 맞는 체크리스트를 만들어보세요.'}</Text><Pressable><Text style={styles.checklistLink}>체크리스트 열기  →</Text></Pressable></View></View>
+            <View style={styles.progressRow}><View style={styles.progressStat}><Text style={styles.progressFraction}>{completed}/{tasks.length}</Text><Text style={styles.progressStatLabel}>단계 완료</Text></View><View style={styles.progressCopy}><View style={styles.progressBarTrack}><View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} /></View><Text style={styles.progressStrong}>{tasks.length ? '잘하고 있어요!' : '준비할 일을 추가해보세요'}</Text><Text style={styles.progressSub}>{tasks.length ? <>서류 준비를 마치면{`\n`}거의 다 왔어요.</> : '신청 내역에 맞는 체크리스트를 만들어보세요.'}</Text><Pressable onPress={() => router.replace('/checklist')}><Text style={styles.checklistLink}>체크리스트 열기  →</Text></Pressable></View></View>
           </View>
 
           <View style={styles.sectionHeader}><View><Text style={styles.cardEyebrow}>MY APPLICATIONS</Text><Text style={styles.sectionTitle}>내 신청 현황 <Text style={styles.countPill}>{applications.length}</Text></Text></View><Pressable onPress={openAddApplication} style={styles.addSmall}><Text style={styles.addSmallText}>＋ 추가</Text></Pressable></View>
@@ -534,12 +536,13 @@ const styles = StyleSheet.create({
   cardEyebrow: { color: '#9aa9a1', fontSize: 9, fontWeight: '800', letterSpacing: 1.2 },
   cardTitle: { color: '#33463e', fontSize: 17, fontWeight: '800', letterSpacing: -0.7, marginTop: 5 },
   progressPercent: { color: '#4c9d82', fontSize: 20, fontWeight: '600' },
-  progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 14, gap: 17 },
-  progressRing: { width: 111, height: 111, borderRadius: 60, borderWidth: 9, borderColor: '#eaf2ed', borderTopColor: '#65b397', borderRightColor: '#65b397', transform: [{ rotate: '25deg' }], justifyContent: 'center', alignItems: 'center' },
-  ringInner: { transform: [{ rotate: '-25deg' }], alignItems: 'center' },
-  ringNumber: { color: '#347e67', fontSize: 24, fontWeight: '800', letterSpacing: -1 },
-  ringLabel: { color: '#9aa8a1', fontSize: 9, marginTop: 2 },
+  progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 18, gap: 17 },
+  progressStat: { width: 82, height: 82, borderRadius: 18, backgroundColor: '#f1f7f3', alignItems: 'center', justifyContent: 'center' },
+  progressFraction: { color: '#347e67', fontSize: 24, fontWeight: '800', letterSpacing: -1 },
+  progressStatLabel: { color: '#9aa8a1', fontSize: 9, marginTop: 2 },
   progressCopy: { flex: 1 },
+  progressBarTrack: { height: 9, width: '100%', borderRadius: 6, backgroundColor: '#e5f0ea', overflow: 'hidden', marginBottom: 12 },
+  progressBarFill: { height: '100%', borderRadius: 6, backgroundColor: '#65b397' },
   progressStrong: { color: '#5e927d', fontSize: 12, fontWeight: '800' },
   progressSub: { color: '#9ba8a1', fontSize: 10, lineHeight: 16, marginTop: 4 },
   checklistLink: { color: '#4b987e', fontSize: 10, fontWeight: '800', marginTop: 12 },
