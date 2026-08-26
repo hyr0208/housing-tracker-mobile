@@ -22,6 +22,18 @@
 | 변동 알림 | 공개 대기인원이 변경되면 앱 알림과 푸시 알림을 보냅니다. |
 | 입주 준비 체크리스트 | 신청별로 준비할 일을 추가하고 진행률을 확인합니다. |
 
+## 📱 화면 미리보기
+
+<p align="center">
+  <img src="docs/screenshots/home.png" width="220" alt="내 차례 홈 화면" />
+  <img src="docs/screenshots/application-search.png" width="220" alt="공식 공고·단지 검색 화면" />
+  <img src="docs/screenshots/profile-login.png" width="220" alt="카카오 로그인 후 내 정보 화면" />
+</p>
+
+<p align="center">
+  <sub>홈 대시보드 · 공식 공고·단지 검색 · 카카오 로그인</sub>
+</p>
+
 ## 🔄 동작 흐름
 
 ```text
