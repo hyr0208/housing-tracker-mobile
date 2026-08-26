@@ -6,6 +6,11 @@ export type PublicWaitSyncResult = {
   publicWaitCount?: number;
   previousWaitCount?: number;
   publicWaitBreakdown?: PublicWaitBreakdown[];
+  matched?: {
+    hsmpNm?: string;
+    drwtUnit?: string;
+    styleNm?: string;
+  };
   checkedAt?: string;
   message?: string;
 };

@@ -137,7 +137,7 @@ curl http://localhost:8787/health
 npm run server:sync
 ```
 
-기본 조회 주기는 6시간이며, 필요하면 환경변수로 변경할 수 있습니다.
+기본 조회 주기는 1시간이며, 필요하면 환경변수로 변경할 수 있습니다.
 
 ```bash
 SYNC_INTERVAL_MINUTES=60 npm run server

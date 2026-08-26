@@ -8,7 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const stateDir = path.join(__dirname, 'data');
 const statePath = path.join(stateDir, 'sync-state.json');
 const port = Number(process.env.PORT || 8787);
-const syncIntervalMs = Number(process.env.SYNC_INTERVAL_MINUTES || 360) * 60 * 1000;
+const syncIntervalMs = Number(process.env.SYNC_INTERVAL_MINUTES || 60) * 60 * 1000;
 const runOnce = process.argv.includes('--once');
 
 async function readState() {
@@ -75,6 +75,8 @@ async function syncApplication(application) {
   }
 
   const row = matches[0];
+  const housingTypeLabel = incoming.housingType || row.drwtUnit || row.styleNm;
+  const housingTypeText = housingTypeLabel ? `${housingTypeLabel}${String(housingTypeLabel).endsWith('형') ? '' : '형'}` : '공개 대기인원';
   const nextWaitCount = Number(row.waitCo ?? 0);
   const publicWaitBreakdown = allMatches.reduce((groups, item) => {
     const label = item.drwtUnit || item.styleNm || '주택형 미상';
@@ -100,7 +102,7 @@ async function syncApplication(application) {
   await writeState(state);
 
   if (changed) {
-    await sendExpoPush(incoming.pushToken, `${row.hsmpNm} 공개 대기현황 변동`, `대기인원이 ${previousWaitCount}명에서 ${nextWaitCount}명으로 변경됐어요.`);
+    await sendExpoPush(incoming.pushToken, `${row.hsmpNm} ${housingTypeText} 대기현황 변동`, `${housingTypeText} 대기인원이 ${previousWaitCount}명 → ${nextWaitCount}명으로 변경됐어요.`);
   }
 
   return { id: application.id, status: 'synced', changed, publicWaitCount: nextWaitCount, previousWaitCount, publicWaitBreakdown, matched: row };

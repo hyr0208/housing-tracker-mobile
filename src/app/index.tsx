@@ -68,6 +68,11 @@ function HomeIllustration() {
   );
 }
 
+function formatHousingType(label?: string) {
+  if (!label) return '공개 대기인원';
+  return label.endsWith('형') ? label : `${label}형`;
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [data, setData] = useState<AppData>(defaultAppData);
@@ -96,6 +101,7 @@ export default function HomeScreen() {
   const completed = tasks.filter((task) => task.done).length;
   const progressPercent = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
   const rankChange = selected ? selected.previousRank - selected.rank : 0;
+  const publicMaxWait = Math.max(1, ...(selected?.publicWaitBreakdown?.map((item) => item.count) ?? []));
 
   useEffect(() => {
     loadAppData().then((stored) => {
@@ -161,8 +167,9 @@ export default function HomeScreen() {
 
     let changeNotification: AppNotification | undefined;
     if (result.changed && typeof result.publicWaitCount === 'number' && typeof result.previousWaitCount === 'number') {
-      const title = `${application.complexName} 공개 대기현황 변동`;
-      const body = `대기인원이 ${result.previousWaitCount}명에서 ${result.publicWaitCount}명으로 변경됐어요.`;
+      const housingTypeText = formatHousingType(application.housingType || result.matched?.drwtUnit || result.matched?.styleNm);
+      const title = `${application.complexName} ${housingTypeText} 대기현황 변동`;
+      const body = `${housingTypeText} 대기인원이 ${result.previousWaitCount}명 → ${result.publicWaitCount}명으로 변경됐어요.`;
       changeNotification = makeNotification(title, body);
       try {
         const permissions = await Notifications.getPermissionsAsync();
@@ -351,15 +358,24 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.publicCard}>
-            <View style={styles.publicCopy}>
-              <Text style={styles.cardEyebrow}>PUBLIC WAITING STATUS</Text>
-              <Text style={styles.publicTitle}>공개 대기현황</Text>
-              <Text style={styles.publicSub}>{isSyncing ? '마이홈 공개 현황을 확인하고 있어요…' : selected.syncMessage || (selected.housingType && selected.publicWaitCount !== undefined ? `${selected.housingType}형 현재 대기인원 ${selected.publicWaitCount}명` : selected.publicWaitBreakdown?.length ? '주택형을 선택하면 정확한 대기인원을 보여줘요.' : '자동 조회를 준비하고 있어요.')}</Text>
-              {selected.publicWaitBreakdown && <View style={styles.breakdownList}>{selected.publicWaitBreakdown.map((item) => <View key={item.label} style={[styles.breakdownChip, selected.housingType === item.label && styles.breakdownChipSelected]}><Text style={styles.breakdownLabel}>{item.label}</Text><Text style={styles.breakdownCount}>{item.count}명</Text></View>)}</View>}
-              {selected.syncStatus === 'synced' && <Text style={styles.autoSyncText}>● 서버가 주기적으로 확인해요</Text>}
-              {selected.publicWaitUpdatedAt && <Text style={styles.publicTime}>마지막 확인 {new Date(selected.publicWaitUpdatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text>}
+            <View style={styles.publicHeader}>
+              <View style={styles.publicCopy}>
+                <Text style={styles.cardEyebrow}>PUBLIC WAITING STATUS</Text>
+                <Text style={styles.publicTitle}>공개 대기현황</Text>
+                <Text style={styles.publicSub}>{isSyncing ? '마이홈 공개 현황을 확인하고 있어요…' : selected.syncMessage || (selected.housingType && selected.publicWaitCount !== undefined ? `${selected.housingType}형 현재 대기인원 ${selected.publicWaitCount}명` : selected.publicWaitBreakdown?.length ? '주택형별로 대기인원을 비교해보세요.' : '자동 조회를 준비하고 있어요.')}</Text>
+                {selected.syncStatus === 'synced' && <Text style={styles.autoSyncText}>● 서버가 주기적으로 확인해요</Text>}
+                {selected.publicWaitUpdatedAt && <Text style={styles.publicTime}>마지막 확인 {new Date(selected.publicWaitUpdatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text>}
+              </View>
+              <Pressable style={styles.syncButton} onPress={() => void runPublicSync(selected, pushTokenRef.current, true)} disabled={isSyncing}><Text style={styles.syncButtonText}>{isSyncing ? '확인 중' : '지금 확인'}</Text></Pressable>
             </View>
-            <Pressable style={styles.syncButton} onPress={() => void runPublicSync(selected, pushTokenRef.current, true)} disabled={isSyncing}><Text style={styles.syncButtonText}>{isSyncing ? '확인 중' : '지금 확인'}</Text></Pressable>
+            {selected.publicWaitBreakdown && <View style={styles.breakdownPanel}>
+              <View style={styles.breakdownPanelHeader}><Text style={styles.breakdownPanelTitle}>주택형별 대기인원</Text><Text style={styles.breakdownPanelHint}>{selected.housingType ? `${selected.housingType} 선택됨` : '전체 보기'}</Text></View>
+              {selected.publicWaitBreakdown.map((item) => <View key={item.label} style={styles.typeRow}>
+                <View style={styles.typeName}><Text style={styles.typeLabel}>{item.label}</Text>{selected.housingType === item.label && <Text style={styles.myTypeLabel}>내 주택형</Text>}</View>
+                <View style={styles.typeBarTrack}><View style={[styles.typeBarFill, { width: `${Math.max(5, (item.count / publicMaxWait) * 100)}%` }]} /></View>
+                <Text style={styles.typeCount}>{item.count}명</Text>
+              </View>)}
+            </View>}
           </View>
 
           <View style={styles.progressCard}>
@@ -470,7 +486,8 @@ const styles = StyleSheet.create({
   changeLabel: { color: '#75a794', fontSize: 8, marginTop: 5 },
   detailButton: { marginTop: 15 },
   detailText: { color: '#38856d', fontSize: 10, fontWeight: '800' },
-  publicCard: { marginHorizontal: 16, marginTop: 12, borderRadius: 17, backgroundColor: '#f8fbf8', borderWidth: 1, borderColor: '#dcebe2', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  publicCard: { marginHorizontal: 16, marginTop: 12, borderRadius: 17, backgroundColor: '#f8fbf8', borderWidth: 1, borderColor: '#dcebe2', padding: 16, flexDirection: 'column', alignItems: 'stretch' },
+  publicHeader: { width: '100%', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   publicCopy: { flex: 1, paddingRight: 10 },
   publicTitle: { color: '#3e5d50', fontSize: 15, fontWeight: '800', marginTop: 5 },
   publicSub: { color: '#82968b', fontSize: 10, marginTop: 5, lineHeight: 15 },
@@ -481,6 +498,17 @@ const styles = StyleSheet.create({
   breakdownCount: { color: '#39836b', fontSize: 9, fontWeight: '800' },
   autoSyncText: { color: '#4b9b81', fontSize: 8, marginTop: 6, fontWeight: '700' },
   publicTime: { color: '#a5b2aa', fontSize: 8, marginTop: 5 },
+  breakdownPanel: { width: '100%', marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#e5efe9' },
+  breakdownPanelHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 },
+  breakdownPanelTitle: { color: '#587368', fontSize: 10, fontWeight: '800' },
+  breakdownPanelHint: { color: '#9aaba2', fontSize: 9 },
+  typeRow: { flexDirection: 'row', alignItems: 'center', minHeight: 25, gap: 8 },
+  typeName: { width: 72, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  typeLabel: { color: '#55786a', fontSize: 10, fontWeight: '700' },
+  myTypeLabel: { color: '#3c9879', fontSize: 7, fontWeight: '800' },
+  typeBarTrack: { flex: 1, height: 7, borderRadius: 5, backgroundColor: '#e5f0ea', overflow: 'hidden' },
+  typeBarFill: { height: '100%', borderRadius: 5, backgroundColor: '#72b59b' },
+  typeCount: { width: 34, color: '#347b65', fontSize: 10, fontWeight: '800', textAlign: 'right' },
   syncButton: { backgroundColor: '#e0f1e8', borderRadius: 9, paddingHorizontal: 11, paddingVertical: 9 },
   syncButtonText: { color: '#438d75', fontSize: 10, fontWeight: '800' },
   guestCard: { marginHorizontal: 16, marginTop: 8, backgroundColor: '#e6f3ed', borderRadius: 23, padding: 24, alignItems: 'center' },
