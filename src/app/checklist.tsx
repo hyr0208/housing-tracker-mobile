@@ -1,10 +1,16 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { defaultAppData, loadAppData, saveAppData, type AppData, type ChecklistTask } from '@/data/storage';
 
 type Filter = 'all' | 'active' | 'done';
+
+type DialogState = {
+  title: string;
+  message: string;
+  onConfirm?: () => void;
+};
 
 export default function ChecklistScreen() {
   const [data, setData] = useState<AppData>(defaultAppData);
@@ -12,6 +18,7 @@ export default function ChecklistScreen() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftDetail, setDraftDetail] = useState('');
+  const [dialog, setDialog] = useState<DialogState | null>(null);
 
   const reload = useCallback(() => {
     loadAppData().then(setData);
@@ -34,10 +41,11 @@ export default function ChecklistScreen() {
   };
 
   const deleteTask = (task: ChecklistTask) => {
-    Alert.alert('준비할 일 삭제', `${task.title}을(를) 삭제할까요?`, [
-      { text: '취소', style: 'cancel' },
-      { text: '삭제', style: 'destructive', onPress: () => updateTasks(data.tasks.filter((item) => item.id !== task.id)) },
-    ]);
+    setDialog({
+      title: '준비할 일 삭제',
+      message: `${task.title}을(를) 삭제할까요?`,
+      onConfirm: () => updateTasks(data.tasks.filter((item) => item.id !== task.id)),
+    });
   };
 
   const addTask = () => {
@@ -81,6 +89,10 @@ export default function ChecklistScreen() {
 
       <Modal visible={isAddOpen} transparent animationType="slide" onRequestClose={() => setIsAddOpen(false)}>
         <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.eyebrow}>NEW CHECKLIST ITEM</Text><Text style={styles.modalTitle}>준비할 일 추가</Text></View><Pressable onPress={() => setIsAddOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>입주 준비에 필요한 일을 직접 기록해두세요.</Text><Text style={styles.inputLabel}>할 일</Text><TextInput value={draftTitle} onChangeText={setDraftTitle} placeholder="예: 주민등록 이전 준비" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Text style={styles.inputLabel}>메모 (선택)</Text><TextInput value={draftDetail} onChangeText={setDraftDetail} placeholder="예: 필요한 서류를 확인해요" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={addTask}><Text style={styles.saveButtonText}>체크리스트에 추가하기  →</Text></Pressable></View></View>
+      </Modal>
+
+      <Modal visible={Boolean(dialog)} transparent animationType="fade" onRequestClose={() => setDialog(null)}>
+        <View style={styles.dialogBackdrop}><View style={styles.dialogCard}><View style={styles.dialogIcon}><Text style={styles.dialogIconText}>!</Text></View><Text style={styles.dialogTitle}>{dialog?.title}</Text><Text style={styles.dialogMessage}>{dialog?.message}</Text><View style={styles.dialogActions}><Pressable style={styles.dialogCancelButton} onPress={() => setDialog(null)}><Text style={styles.dialogCancelText}>취소</Text></Pressable><Pressable style={styles.dialogConfirmButton} onPress={() => { const action = dialog?.onConfirm; setDialog(null); action?.(); }}><Text style={styles.dialogConfirmText}>삭제</Text></Pressable></View></View></View>
       </Modal>
     </View>
   );
@@ -130,6 +142,17 @@ const styles = StyleSheet.create({
   emptyTitle: { color: '#527662', fontSize: 13, fontWeight: '800', marginTop: 12 },
   emptyText: { color: '#8aa097', fontSize: 10, marginTop: 6, textAlign: 'center' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(33, 55, 46, 0.28)', justifyContent: 'flex-end' },
+  dialogBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(32, 59, 48, 0.33)', paddingHorizontal: 30 },
+  dialogCard: { width: '100%', borderRadius: 18, backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14, shadowColor: '#24483a', shadowOpacity: 0.18, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
+  dialogIcon: { width: 34, height: 34, borderRadius: 12, backgroundColor: '#fae8e2', alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
+  dialogIconText: { color: '#d98471', fontSize: 17, fontWeight: '800' },
+  dialogTitle: { color: '#243b34', fontSize: 16, fontWeight: '800', textAlign: 'center', marginTop: 12 },
+  dialogMessage: { color: '#74857c', fontSize: 11, lineHeight: 17, textAlign: 'center', marginTop: 7 },
+  dialogActions: { flexDirection: 'row', gap: 8, marginTop: 17 },
+  dialogCancelButton: { flex: 1, height: 42, borderRadius: 10, backgroundColor: '#f2f6f3', alignItems: 'center', justifyContent: 'center' },
+  dialogCancelText: { color: '#71847a', fontSize: 11, fontWeight: '800' },
+  dialogConfirmButton: { flex: 1, height: 42, borderRadius: 10, backgroundColor: '#d98471', alignItems: 'center', justifyContent: 'center' },
+  dialogConfirmText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   modalCard: { backgroundColor: '#fff', borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 24, paddingBottom: 34 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   modalTitle: { color: '#29483d', fontSize: 21, fontWeight: '800', marginTop: 7 },

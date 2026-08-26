@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fetchWaitingRows, findMatchingRows } from './myhome-api.mjs';
+import { fetchWaitingRows, findMatchingRows, searchComplexRows } from './myhome-api.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const stateDir = path.join(__dirname, 'data');
@@ -146,6 +146,18 @@ const server = http.createServer(async (request, response) => {
       };
       const rows = await fetchWaitingRows(application);
       sendJson(response, 200, { rows: findMatchingRows(rows, application), totalCount: rows.length });
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/complex-search') {
+      const keyword = url.searchParams.get('keyword')?.trim() || '';
+      const brtcCode = url.searchParams.get('brtcCode') || '';
+      if (!keyword || !brtcCode) {
+        sendJson(response, 400, { error: '검색어와 지역 정보가 필요합니다.' });
+        return;
+      }
+      const rows = await fetchWaitingRows({ brtcCode, searchKeyword: keyword });
+      sendJson(response, 200, { results: searchComplexRows(rows, { keyword, brtcCode }) });
       return;
     }
 

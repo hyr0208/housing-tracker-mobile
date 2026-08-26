@@ -34,6 +34,10 @@ function asList(item) {
   return Array.isArray(item) ? item : [item];
 }
 
+function isApiCode(value) {
+  return /^\d+$/.test(String(value || '').trim());
+}
+
 async function fetchWithTimeout(url, timeoutMs = 15000) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -57,10 +61,10 @@ async function fetchWithRetry(url, attempts = 5) {
   }
 }
 
-export async function fetchWaitingRows({ brtcCode, signguCode, suplyTy, houseTy, complexName, housingType }) {
+export async function fetchWaitingRows({ brtcCode, signguCode, suplyTy, houseTy, complexName, housingType, searchKeyword }) {
   if (!brtcCode) throw new Error('광역시도 코드(brtcCode)가 필요합니다.');
 
-  const cacheKey = [brtcCode, signguCode || '', suplyTy || '', houseTy || '', normalizeName(complexName)].join('|');
+  const cacheKey = [brtcCode, signguCode || '', suplyTy || '', houseTy || '', normalizeName(complexName), normalizeName(searchKeyword)].join('|');
   const cached = rowsCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.rows;
 
@@ -77,8 +81,10 @@ export async function fetchWaitingRows({ brtcCode, signguCode, suplyTy, houseTy,
     url.searchParams.set('numOfRows', String(numOfRows));
     url.searchParams.set('pageNo', String(pageNo));
     if (signguCode) url.searchParams.set('signguCode', signguCode);
-    if (suplyTy) url.searchParams.set('suplyTy', suplyTy);
-    if (houseTy) url.searchParams.set('houseTy', houseTy);
+    // 검색 결과에 표시되는 '국민임대', '아파트' 같은 값은 이름이고,
+    // 마이홈 API의 필터는 숫자 코드만 받습니다. 이름은 아래 매칭 단계에서 비교합니다.
+    if (suplyTy && isApiCode(suplyTy)) url.searchParams.set('suplyTy', suplyTy);
+    if (houseTy && isApiCode(houseTy)) url.searchParams.set('houseTy', houseTy);
 
     const response = await fetchWithRetry(url);
     if (!response.ok) {
@@ -95,6 +101,7 @@ export async function fetchWaitingRows({ brtcCode, signguCode, suplyTy, houseTy,
     const pageItems = asList(body.item);
     rows.push(...pageItems);
     if (complexName && housingType && findMatchingRows(rows, { complexName, suplyTy, houseTy, housingType }).length > 0) break;
+    if (searchKeyword && rows.some((row) => [row.hsmpNm, row.rnAdres, row.signguNm, row.brtcNm].some((value) => normalizeName(value).includes(normalizeName(searchKeyword))))) break;
     if (rows.length >= Number(body.totalCount || 0) || pageItems.length < numOfRows) break;
     pageNo += 1;
   }
@@ -133,6 +140,41 @@ export function findMatchingRows(rows, { complexName, suplyTy, houseTy, housingT
     const housingTypeMatches = !normalizedHousingType || rowHousingTypes.some((value) => value === normalizedHousingType || value.includes(normalizedHousingType) || normalizedHousingType.includes(value));
     return nameMatches && supplyMatches && houseMatches && housingTypeMatches;
   });
+}
+
+export function searchComplexRows(rows, { keyword, brtcCode }) {
+  const normalizedKeyword = normalizeName(keyword);
+  if (!normalizedKeyword) return [];
+
+  const results = new Map();
+  rows.forEach((row) => {
+    const searchable = [row.hsmpNm, row.rnAdres, row.signguNm, row.brtcNm]
+      .map((value) => normalizeName(value))
+      .filter(Boolean)
+      .join(' ');
+    if (!searchable.includes(normalizedKeyword)) return;
+
+    const key = `${row.hsmpSn || row.hsmpNm || 'unknown'}|${row.suplyTyNm || ''}`;
+    const existing = results.get(key) || {
+      id: key,
+      complexName: row.hsmpNm || '',
+      area: [row.brtcNm, row.signguNm].filter(Boolean).join(' '),
+      brtcCode,
+      suplyTy: row.suplyTyNm || undefined,
+      houseTy: row.houseTyNm || undefined,
+      address: row.rnAdres || undefined,
+      housingTypes: [],
+    };
+
+    [row.drwtUnit, row.styleNm].filter(Boolean).forEach((label) => {
+      if (!existing.housingTypes.includes(label)) existing.housingTypes.push(label);
+    });
+    results.set(key, existing);
+  });
+
+  return [...results.values()]
+    .sort((left, right) => left.complexName.localeCompare(right.complexName, 'ko'))
+    .slice(0, 30);
 }
 
 export { API_BASE_URL };

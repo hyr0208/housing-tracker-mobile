@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -21,6 +20,7 @@ import {
   type HousingApplication,
 } from '@/data/storage';
 import { syncPublicWait } from '@/services/public-sync';
+import { searchComplexes, type ComplexSearchResult } from '@/services/complex-search';
 import { prepareNotifications } from '@/services/notifications';
 import { clearKakaoSession, loginWithKakao } from '@/services/kakao-auth';
 import * as Notifications from 'expo-notifications';
@@ -43,6 +43,16 @@ const COLORS = {
   greenSoft: '#e1f2ea',
   canvas: '#f4f7f3',
   white: '#ffffff',
+};
+
+type DialogState = {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+  tone?: 'success' | 'error' | 'info';
+  onConfirm?: () => void;
 };
 
 function Chevron({ direction = 'right' }: { direction?: 'right' | 'down' }) {
@@ -74,6 +84,27 @@ function formatHousingType(label?: string) {
   return label.endsWith('형') ? label : `${label}형`;
 }
 
+function getBrtcCode(area = '') {
+  const value = area.trim();
+  return value.startsWith('서울') ? '11' : value.startsWith('부산') ? '26' : value.startsWith('대구') ? '27' : value.startsWith('인천') ? '28' : value.startsWith('광주') ? '29' : value.startsWith('대전') ? '30' : value.startsWith('울산') ? '31' : value.startsWith('세종') ? '36' : value.startsWith('경기') ? '41' : value.startsWith('강원') ? '42' : value.startsWith('충북') ? '43' : value.startsWith('충남') ? '44' : value.startsWith('전북') ? '45' : value.startsWith('전남') ? '46' : value.startsWith('경북') ? '47' : value.startsWith('경남') ? '48' : value.startsWith('제주') ? '50' : undefined;
+}
+
+function CustomDialog({ dialog, onDismiss }: { dialog: DialogState; onDismiss: () => void }) {
+  return (
+    <View style={styles.dialogCard}>
+      <View style={[styles.dialogIcon, dialog.tone === 'error' && styles.dialogIconError, dialog.tone === 'success' && styles.dialogIconSuccess]}>
+        <Text style={styles.dialogIconText}>{dialog.tone === 'error' ? '!' : dialog.tone === 'success' ? '✓' : 'i'}</Text>
+      </View>
+      <Text style={styles.dialogTitle}>{dialog.title}</Text>
+      <Text style={styles.dialogMessage}>{dialog.message}</Text>
+      <View style={styles.dialogActions}>
+        {dialog.cancelLabel && <Pressable style={styles.dialogCancelButton} onPress={onDismiss}><Text style={styles.dialogCancelText}>{dialog.cancelLabel}</Text></Pressable>}
+        <Pressable style={[styles.dialogConfirmButton, dialog.destructive && styles.dialogConfirmDanger]} onPress={() => { const action = dialog.onConfirm; onDismiss(); action?.(); }}><Text style={styles.dialogConfirmText}>{dialog.confirmLabel || '확인'}</Text></Pressable>
+      </View>
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -85,12 +116,21 @@ export default function HomeScreen() {
   const [isRankOpen, setIsRankOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [dialog, setDialog] = useState<DialogState | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftRank, setDraftRank] = useState('');
   const [draftComplexName, setDraftComplexName] = useState('');
   const [draftArea, setDraftArea] = useState('');
   const [draftHousingType, setDraftHousingType] = useState('');
+  const [draftSuplyTy, setDraftSuplyTy] = useState('');
+  const [draftSearchKeyword, setDraftSearchKeyword] = useState('');
+  const [searchResults, setSearchResults] = useState<ComplexSearchResult[]>([]);
+  const [selectedComplex, setSelectedComplex] = useState<ComplexSearchResult | undefined>();
+  const [searchFeedback, setSearchFeedback] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
   const [draftProfileName, setDraftProfileName] = useState('');
+  const [titleInputError, setTitleInputError] = useState(false);
+  const [rankInputError, setRankInputError] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isKakaoLoading, setIsKakaoLoading] = useState(false);
   const pushTokenRef = useRef<string | undefined>(undefined);
@@ -104,6 +144,10 @@ export default function HomeScreen() {
   const progressPercent = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
   const rankChange = selected ? selected.previousRank - selected.rank : 0;
   const publicMaxWait = Math.max(1, ...(selected?.publicWaitBreakdown?.map((item) => item.count) ?? []));
+
+  const showDialog = (title: string, message: string, options: Omit<DialogState, 'title' | 'message'> = {}) => {
+    setDialog({ title, message, ...options });
+  };
 
   useEffect(() => {
     loadAppData().then((stored) => {
@@ -131,7 +175,7 @@ export default function HomeScreen() {
 
   const handleKakaoLogin = async () => {
     if (!kakaoNativeAppKey) {
-      Alert.alert('카카오 키가 필요해요', '.env에 EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY를 입력해주세요.');
+      showDialog('카카오 키가 필요해요', '.env에 EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY를 입력해주세요.', { tone: 'info' });
       return;
     }
     setIsKakaoLoading(true);
@@ -139,9 +183,9 @@ export default function HomeScreen() {
       const profile = await loginWithKakao();
       updateData({ ...data, profile: { provider: 'kakao', id: profile.id, nickname: profile.nickname, loggedInAt: new Date().toISOString() }, profileName: profile.nickname });
       setDraftProfileName(profile.nickname);
-      Alert.alert('로그인 완료', `${profile.nickname}님, 환영해요.`);
+      showDialog('로그인 완료', `${profile.nickname}님, 환영해요.`, { tone: 'success' });
     } catch (error) {
-      Alert.alert('카카오 로그인 실패', error instanceof Error ? error.message : '로그인 중 오류가 발생했어요.');
+      showDialog('카카오 로그인 실패', error instanceof Error ? error.message : '로그인 중 오류가 발생했어요.', { tone: 'error' });
     } finally {
       setIsKakaoLoading(false);
     }
@@ -164,7 +208,7 @@ export default function HomeScreen() {
     if (!result) return;
 
     if (showFailureAlert && (result.status === 'error' || result.status === 'no_match')) {
-      Alert.alert(result.status === 'no_match' ? '단지를 찾지 못했어요' : '공개 대기현황 조회 실패', result.message || '잠시 후 다시 확인해주세요.');
+      showDialog(result.status === 'no_match' ? '단지를 찾지 못했어요' : '공개 대기현황 조회 실패', result.message || '잠시 후 다시 확인해주세요.', { tone: 'error' });
     }
 
     let changeNotification: AppNotification | undefined;
@@ -216,6 +260,13 @@ export default function HomeScreen() {
     setDraftComplexName('');
     setDraftArea('');
     setDraftHousingType('');
+    setDraftSuplyTy('');
+    setDraftSearchKeyword('');
+    setSearchResults([]);
+    setSelectedComplex(undefined);
+    setSearchFeedback('');
+    setTitleInputError(false);
+    setRankInputError(false);
     setIsAddOpen(true);
   };
 
@@ -226,26 +277,65 @@ export default function HomeScreen() {
     setDraftComplexName(application.complexName ?? '');
     setDraftArea(application.area);
     setDraftHousingType(application.housingType ?? '');
+    setDraftSuplyTy(application.suplyTy ?? '');
+    setDraftSearchKeyword(application.complexName ?? application.title);
+    setSearchResults([]);
+    setSelectedComplex(undefined);
+    setSearchFeedback('');
+    setTitleInputError(false);
+    setRankInputError(false);
     setIsAddOpen(true);
+  };
+
+  const searchOfficialComplexes = async () => {
+    const keyword = draftSearchKeyword.trim();
+    const brtcCode = getBrtcCode(draftArea);
+    if (!keyword || !brtcCode) {
+      showDialog('검색 정보가 필요해요', '지역을 먼저 입력하고 단지명이나 공고명으로 검색해주세요.\n예: 경기 성남시 / 성남산단', { tone: 'info' });
+      return;
+    }
+    setIsSearching(true);
+    setSearchFeedback('공식 공고를 찾고 있어요…');
+    try {
+      const results = await searchComplexes(keyword, brtcCode);
+      setSearchResults(results);
+      setSearchFeedback(results.length > 0 ? `${results.length}개의 공식 단지를 찾았어요. 하나를 선택해주세요.` : '검색 결과가 없어요. 지역이나 검색어를 조금 바꿔보세요.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '잠시 후 다시 시도해주세요.';
+      setSearchFeedback(message);
+      showDialog('공고 검색 실패', message, { tone: 'error' });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const chooseOfficialComplex = (result: ComplexSearchResult) => {
+    setSelectedComplex(result);
+    if (!draftTitle.trim()) setDraftTitle(result.complexName);
+    setDraftComplexName(result.complexName);
+    setDraftArea(result.area);
+    setDraftSuplyTy(result.suplyTy ?? '');
+    setDraftHousingType('');
+    setSearchResults([]);
+    setSearchFeedback('공식 정보가 선택됐어요. 주택형을 골라주세요.');
   };
 
   const deleteApplication = (applicationId: string) => {
     const application = applications.find((item) => item.id === applicationId);
     if (!application) return;
-    Alert.alert('신청 내역 삭제', `${application.title} 내역을 삭제할까요?`, [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '삭제',
-        style: 'destructive',
-        onPress: () => {
-          const remaining = applications.filter((item) => item.id !== applicationId);
-          updateData({ ...data, applications: remaining });
-          setSelectedId(remaining[0]?.id);
-          setEditingApplicationId(undefined);
-          setIsAddOpen(false);
-        },
+    showDialog('신청 내역 삭제', `${application.title} 내역을 삭제할까요?`, {
+      tone: 'error',
+      cancelLabel: '취소',
+      confirmLabel: '삭제',
+      destructive: true,
+      onConfirm: () => {
+        const remaining = applications.filter((item) => item.id !== applicationId);
+        updateData({ ...data, applications: remaining });
+        setSelectedId(remaining[0]?.id);
+        setEditingApplicationId(undefined);
+        setIsAddOpen(false);
       },
-    ]);
+    });
   };
 
   const saveApplication = () => {
@@ -255,11 +345,24 @@ export default function HomeScreen() {
     }
     const title = draftTitle.trim();
     const rank = Number(draftRank);
-    if (!title || !Number.isFinite(rank) || rank < 1) return;
-    const complexName = draftComplexName.trim() || title;
-    const area = draftArea.trim() || '지역 미등록';
+    if (!title) {
+      setTitleInputError(true);
+      showDialog('공고명을 입력해주세요', '신청 내역을 저장하려면 공고명이나 식별할 수 있는 이름이 필요해요.', { tone: 'info' });
+      return;
+    }
+    if (!Number.isFinite(rank) || rank < 1) {
+      setRankInputError(true);
+      showDialog('예비순번을 입력해주세요', '예비순번이 있어야 이후 순번 변동을 기록하고 알림을 받을 수 있어요.', { tone: 'info' });
+      return;
+    }
+    const complexName = selectedComplex?.complexName || draftComplexName.trim() || title;
+    const area = selectedComplex?.area || draftArea.trim() || '지역 미등록';
     const housingType = draftHousingType.trim() || undefined;
-    const brtcCode = area.startsWith('서울') ? '11' : area.startsWith('부산') ? '26' : area.startsWith('대구') ? '27' : area.startsWith('인천') ? '28' : area.startsWith('광주') ? '29' : area.startsWith('대전') ? '30' : area.startsWith('울산') ? '31' : area.startsWith('세종') ? '36' : area.startsWith('경기') ? '41' : area.startsWith('강원') ? '42' : area.startsWith('충북') ? '43' : area.startsWith('충남') ? '44' : area.startsWith('전북') ? '45' : area.startsWith('전남') ? '46' : area.startsWith('경북') ? '47' : area.startsWith('경남') ? '48' : area.startsWith('제주') ? '50' : undefined;
+    const brtcCode = selectedComplex?.brtcCode || getBrtcCode(area);
+    const existingApplication = editingApplicationId ? applications.find((item) => item.id === editingApplicationId) : undefined;
+    const suplyTy = selectedComplex?.suplyTy || draftSuplyTy.trim() || existingApplication?.suplyTy;
+    const houseTy = selectedComplex?.houseTy || existingApplication?.houseTy;
+    const selectedType = suplyTy ? `${suplyTy} · 미등록 면적` : '행복주택 · 미등록 면적';
     if (editingApplicationId) {
       const next = {
         ...data,
@@ -269,6 +372,8 @@ export default function HomeScreen() {
           area,
           complexName,
           brtcCode,
+          suplyTy,
+          houseTy,
           housingType,
           initials: title.replace(/\s/g, '').slice(0, 2).toUpperCase(),
           updatedAt: '방금 전',
@@ -281,7 +386,7 @@ export default function HomeScreen() {
     const newApplication: HousingApplication = {
       id: `application-${Date.now()}`,
       title,
-      type: '행복주택 · 미등록 면적',
+      type: selectedType,
       area,
       rank,
       previousRank: rank,
@@ -291,6 +396,8 @@ export default function HomeScreen() {
       history: [{ rank, recordedAt: now }],
       complexName,
       brtcCode,
+      suplyTy,
+      houseTy,
       housingType,
     };
     const next = { ...data, applications: [...applications, newApplication], notifications: [makeNotification('신청 내역을 저장했어요', `${title} ${rank}번을 기록했습니다.`), ...data.notifications] };
@@ -302,6 +409,10 @@ export default function HomeScreen() {
     setDraftComplexName('');
     setDraftArea('');
     setDraftHousingType('');
+    setDraftSuplyTy('');
+    setDraftSearchKeyword('');
+    setSearchResults([]);
+    setSelectedComplex(undefined);
     setEditingApplicationId(undefined);
     setIsAddOpen(false);
   };
@@ -309,7 +420,10 @@ export default function HomeScreen() {
   const saveRank = () => {
     if (!selected) return;
     const nextRank = Number(draftRank);
-    if (!Number.isFinite(nextRank) || nextRank < 1) return;
+    if (!Number.isFinite(nextRank) || nextRank < 1) {
+      showDialog('순번을 입력해주세요', '현재 예비순번은 1번 이상 숫자로 입력해야 해요.', { tone: 'info' });
+      return;
+    }
     const moved = selected.rank - nextRank;
     const updated: HousingApplication = { ...selected, previousRank: selected.rank, rank: nextRank, updatedAt: '방금 전', history: [...selected.history, { rank: nextRank, recordedAt: new Date().toISOString().slice(0, 10) }] };
     const notification = moved > 0 ? makeNotification(`${selected.title} 순번이 상승했어요`, `${selected.rank}번에서 ${nextRank}번으로 ${moved}계단 가까워졌어요.`) : makeNotification(`${selected.title} 순번을 기록했어요`, `현재 순번은 ${nextRank}번입니다.`);
@@ -413,26 +527,53 @@ export default function HomeScreen() {
               </View>
               <Pressable onPress={() => setIsAddOpen(false)}><Text style={styles.closeText}>×</Text></Pressable>
             </View>
-            <Text style={styles.modalCopy}>공고 정보와 공식 단지명을 수정할 수 있어요. 예비순번은 이력 보존을 위해 별도로 관리해요.</Text>
+            <Text style={styles.modalCopy}>지역과 공고명 일부를 검색하면 공식 단지명과 주택형을 불러올 수 있어요. 예비순번은 이력 보존을 위해 별도로 관리해요.</Text>
             <Text style={styles.inputLabel}>공고명</Text>
-            <TextInput value={draftTitle} onChangeText={setDraftTitle} placeholder="예: 행복주택 공고명" placeholderTextColor="#a9b4ae" style={styles.input} />
-            <Text style={styles.inputLabel}>공식 단지명</Text>
-            <TextInput value={draftComplexName} onChangeText={setDraftComplexName} placeholder="예: 단지 공식 명칭" placeholderTextColor="#a9b4ae" style={styles.input} />
+            <TextInput value={draftTitle} onChangeText={(value) => { setDraftTitle(value); setTitleInputError(false); }} placeholder="예: 행복주택 공고명" placeholderTextColor="#a9b4ae" style={[styles.input, titleInputError && styles.inputError]} />
+            {titleInputError && <Text style={styles.inputErrorText}>공고명을 입력해주세요.</Text>}
             <Text style={styles.inputLabel}>지역</Text>
-            <TextInput value={draftArea} onChangeText={setDraftArea} placeholder="예: 서울 강서구" placeholderTextColor="#a9b4ae" style={styles.input} />
+            <TextInput value={draftArea} onChangeText={(value) => { setDraftArea(value); setSelectedComplex(undefined); }} placeholder="예: 경기 성남시" placeholderTextColor="#a9b4ae" style={styles.input} />
+            <Text style={styles.inputLabel}>공고·단지 검색</Text>
+            <View style={styles.searchRow}>
+              <TextInput value={draftSearchKeyword} onChangeText={setDraftSearchKeyword} onSubmitEditing={() => void searchOfficialComplexes()} returnKeyType="search" placeholder="예: 성남산단 또는 마곡" placeholderTextColor="#a9b4ae" style={styles.searchInput} />
+              <Pressable style={styles.searchButton} onPress={() => void searchOfficialComplexes()} disabled={isSearching}><Text style={styles.searchButtonText}>{isSearching ? '검색 중' : '검색'}</Text></Pressable>
+            </View>
+            <Text style={styles.inputHint}>지역을 먼저 입력해야 정확한 공식 공고를 찾을 수 있어요.</Text>
+            {!!searchFeedback && <Text style={[styles.searchFeedback, isSearching && styles.searchFeedbackLoading]}>{searchFeedback}</Text>}
+            {searchResults.length > 0 && <ScrollView style={styles.searchResults} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+              {searchResults.map((result) => <Pressable key={result.id} style={styles.searchResult} onPress={() => chooseOfficialComplex(result)}>
+                <Text style={styles.searchResultTitle}>{result.complexName}</Text>
+                <Text style={styles.searchResultMeta}>{result.area}{result.suplyTy ? ` · ${result.suplyTy}` : ''}</Text>
+                {!!result.address && <Text style={styles.searchResultAddress} numberOfLines={1}>{result.address}</Text>}
+                <Text style={styles.searchResultTypes}>{result.housingTypes.length ? `주택형 ${result.housingTypes.slice(0, 4).join(', ')}` : '주택형 정보 확인 필요'}  →</Text>
+              </Pressable>)}
+            </ScrollView>}
+            {selectedComplex ? <View style={styles.selectedComplexCard}>
+              <View style={styles.selectedComplexHeader}><Text style={styles.selectedComplexLabel}>공식 정보 선택됨</Text><Pressable onPress={() => setSelectedComplex(undefined)}><Text style={styles.changeSelection}>다시 검색</Text></Pressable></View>
+              <Text style={styles.selectedComplexName}>{selectedComplex.complexName}</Text>
+              <Text style={styles.selectedComplexMeta}>{selectedComplex.area}{selectedComplex.suplyTy ? ` · ${selectedComplex.suplyTy}` : ''}</Text>
+            </View> : searchResults.length === 0 && <>
+              <Text style={styles.inputLabel}>공식 단지명 (검색 실패 시 직접 입력)</Text>
+              <TextInput value={draftComplexName} onChangeText={setDraftComplexName} placeholder="공식 단지명을 직접 입력할 수 있어요" placeholderTextColor="#a9b4ae" style={styles.input} />
+            </>}
             <Text style={styles.inputLabel}>주택형 (선택)</Text>
             <TextInput value={draftHousingType} onChangeText={setDraftHousingType} placeholder="예: 21A 또는 26A" placeholderTextColor="#a9b4ae" style={styles.input} />
-            <Text style={styles.inputLabel}>현재 예비순번</Text>
-            <TextInput value={draftRank} onChangeText={setDraftRank} editable={!editingApplicationId} keyboardType="number-pad" placeholder="예: 120" placeholderTextColor="#a9b4ae" style={[styles.input, editingApplicationId && styles.inputDisabled]} />
+            {selectedComplex && selectedComplex.housingTypes.length > 0 && <View style={styles.housingTypeOptions}>
+              {selectedComplex.housingTypes.map((type) => <Pressable key={type} style={[styles.housingTypeChip, draftHousingType === type && styles.housingTypeChipSelected]} onPress={() => setDraftHousingType(type)}><Text style={[styles.housingTypeChipText, draftHousingType === type && styles.housingTypeChipTextSelected]}>{type}</Text></Pressable>)}
+            </View>}
+            <Text style={styles.inputLabel}>현재 예비순번 (필수)</Text>
+            <TextInput value={draftRank} onChangeText={(value) => { setDraftRank(value); setRankInputError(false); }} editable={!editingApplicationId} keyboardType="number-pad" placeholder="예: 120" placeholderTextColor="#a9b4ae" style={[styles.input, editingApplicationId && styles.inputDisabled, rankInputError && styles.inputError]} />
+            {rankInputError && <Text style={styles.inputErrorText}>예비순번을 입력해야 저장할 수 있어요.</Text>}
             {editingApplicationId && <Text style={styles.inputHint}>순번을 바꾸려면 홈 카드의 ‘순번 업데이트’를 이용해주세요.</Text>}
             <Pressable style={styles.saveButton} onPress={saveApplication}><Text style={styles.saveButtonText}>{editingApplicationId ? '변경사항 저장하기  →' : '신청 내역 저장하기  →'}</Text></Pressable>
             {editingApplicationId && <Pressable style={styles.deleteButton} onPress={() => deleteApplication(editingApplicationId)}><Text style={styles.deleteButtonText}>이 신청 내역 삭제하기</Text></Pressable>}
           </View>
+          {dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}
         </View>
       </Modal>
 
       {selected && <Modal visible={isRankOpen} transparent animationType="slide" onRequestClose={() => setIsRankOpen(false)}>
-        <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>UPDATE RANK</Text><Text style={styles.modalTitle}>현재 순번 기록</Text></View><Pressable onPress={() => setIsRankOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>{selected.title}의 공고문이나 대기현황에서 확인한 최신 순번을 입력하세요.</Text><Text style={styles.inputLabel}>현재 예비순번</Text><TextInput value={draftRank} onChangeText={setDraftRank} keyboardType="number-pad" placeholder="예: 24" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Text style={styles.historyTitle}>최근 순번 이력</Text><View style={styles.historyList}>{selected.history.slice(-3).reverse().map((snapshot) => <View key={`${snapshot.recordedAt}-${snapshot.rank}`} style={styles.historyRow}><Text style={styles.historyDate}>{snapshot.recordedAt}</Text><Text style={styles.historyRank}>{snapshot.rank}번</Text></View>)}</View><Pressable style={styles.saveButton} onPress={saveRank}><Text style={styles.saveButtonText}>순번 업데이트 저장  →</Text></Pressable></View></View>
+        <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>UPDATE RANK</Text><Text style={styles.modalTitle}>현재 순번 기록</Text></View><Pressable onPress={() => setIsRankOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>{selected.title}의 공고문이나 대기현황에서 확인한 최신 순번을 입력하세요.</Text><Text style={styles.inputLabel}>현재 예비순번</Text><TextInput value={draftRank} onChangeText={setDraftRank} keyboardType="number-pad" placeholder="예: 24" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Text style={styles.historyTitle}>최근 순번 이력</Text><View style={styles.historyList}>{selected.history.slice(-3).reverse().map((snapshot) => <View key={`${snapshot.recordedAt}-${snapshot.rank}`} style={styles.historyRow}><Text style={styles.historyDate}>{snapshot.recordedAt}</Text><Text style={styles.historyRank}>{snapshot.rank}번</Text></View>)}</View><Pressable style={styles.saveButton} onPress={saveRank}><Text style={styles.saveButtonText}>순번 업데이트 저장  →</Text></Pressable></View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</View>
       </Modal>}
 
       <Modal visible={isNotificationOpen} transparent animationType="slide" onRequestClose={() => setIsNotificationOpen(false)}>
@@ -440,8 +581,10 @@ export default function HomeScreen() {
       </Modal>
 
       <Modal visible={isProfileOpen} transparent animationType="slide" onRequestClose={() => setIsProfileOpen(false)}>
-                <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>MY PROFILE</Text><Text style={styles.modalTitle}>내 정보</Text></View><Pressable onPress={() => setIsProfileOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View>{data.profile ? <><Text style={styles.loggedInLabel}>카카오로 로그인됨</Text><Text style={styles.loggedInName}>{data.profile.nickname}</Text><Text style={styles.modalCopy}>신청 내역과 알림 설정을 이 계정에 연결할 수 있어요.</Text><Pressable style={styles.outlineButton} onPress={() => { void clearKakaoSession(); updateData({ ...data, profile: undefined, profileName: undefined }); setIsProfileOpen(false); }}><Text style={styles.outlineButtonText}>로그아웃</Text></Pressable></> : <><Text style={styles.modalCopy}>카카오로 로그인하면 이 앱에서 사용하는 이름과 신청 내역을 계정에 연결할 수 있어요.</Text><Pressable style={styles.kakaoButton} disabled={!kakaoNativeAppKey || isKakaoLoading} onPress={() => void handleKakaoLogin()}><Text style={styles.kakaoButtonText}>{isKakaoLoading ? '로그인 중…' : '카카오로 로그인'}</Text></Pressable><Text style={styles.loginHint}>아직 키가 없으면 아래에서 이름만 저장해도 돼요.</Text><Text style={styles.inputLabel}>이름</Text><TextInput value={draftProfileName} onChangeText={setDraftProfileName} placeholder="예: 민지" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={() => { const name = draftProfileName.trim(); if (!name) return; updateData({ ...data, profileName: name }); setIsProfileOpen(false); }}><Text style={styles.saveButtonText}>이름만 저장하기</Text></Pressable></>}</View></View>
+                <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>MY PROFILE</Text><Text style={styles.modalTitle}>내 정보</Text></View><Pressable onPress={() => setIsProfileOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View>{data.profile ? <><Text style={styles.loggedInLabel}>카카오로 로그인됨</Text><Text style={styles.loggedInName}>{data.profile.nickname}</Text><Text style={styles.modalCopy}>신청 내역과 알림 설정을 이 계정에 연결할 수 있어요.</Text><Pressable style={styles.outlineButton} onPress={() => { void clearKakaoSession(); updateData({ ...data, profile: undefined, profileName: undefined }); setIsProfileOpen(false); }}><Text style={styles.outlineButtonText}>로그아웃</Text></Pressable></> : <><Text style={styles.modalCopy}>카카오로 로그인하면 이 앱에서 사용하는 이름과 신청 내역을 계정에 연결할 수 있어요.</Text><Pressable style={styles.kakaoButton} disabled={!kakaoNativeAppKey || isKakaoLoading} onPress={() => void handleKakaoLogin()}><Text style={styles.kakaoButtonText}>{isKakaoLoading ? '로그인 중…' : '카카오로 로그인'}</Text></Pressable><Text style={styles.loginHint}>아직 키가 없으면 아래에서 이름만 저장해도 돼요.</Text><Text style={styles.inputLabel}>이름</Text><TextInput value={draftProfileName} onChangeText={setDraftProfileName} placeholder="예: 민지" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={() => { const name = draftProfileName.trim(); if (!name) return; updateData({ ...data, profileName: name }); setIsProfileOpen(false); }}><Text style={styles.saveButtonText}>이름만 저장하기</Text></Pressable></>}</View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</View>
       </Modal>
+
+      {dialog && !isAddOpen && !isRankOpen && !isNotificationOpen && !isProfileOpen && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}
     </View>
   );
 }
@@ -588,6 +731,21 @@ const styles = StyleSheet.create({
   chevron: { color: '#89a494', fontSize: 24, fontWeight: '300' },
   chevronDown: { color: '#89a494', fontSize: 17 },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#203b3088' },
+  dialogLayer: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: '#203b3055', paddingHorizontal: 30, zIndex: 20 },
+  dialogBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#203b3055', paddingHorizontal: 30 },
+  dialogCard: { width: '100%', borderRadius: 18, backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14, shadowColor: '#24483a', shadowOpacity: 0.18, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
+  dialogIcon: { width: 34, height: 34, borderRadius: 12, backgroundColor: '#e1f2ea', alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
+  dialogIconError: { backgroundColor: '#fae8e2' },
+  dialogIconSuccess: { backgroundColor: '#d9f1e5' },
+  dialogIconText: { color: '#3b987b', fontSize: 17, fontWeight: '800' },
+  dialogTitle: { color: COLORS.ink, fontSize: 16, fontWeight: '800', textAlign: 'center', marginTop: 12 },
+  dialogMessage: { color: '#74857c', fontSize: 11, lineHeight: 17, textAlign: 'center', marginTop: 7 },
+  dialogActions: { flexDirection: 'row', gap: 8, marginTop: 17 },
+  dialogCancelButton: { flex: 1, height: 42, borderRadius: 10, backgroundColor: '#f2f6f3', alignItems: 'center', justifyContent: 'center' },
+  dialogCancelText: { color: '#71847a', fontSize: 11, fontWeight: '800' },
+  dialogConfirmButton: { flex: 1, height: 42, borderRadius: 10, backgroundColor: '#3b987b', alignItems: 'center', justifyContent: 'center' },
+  dialogConfirmDanger: { backgroundColor: '#d98471' },
+  dialogConfirmText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   modalCard: { backgroundColor: '#fff', borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 22, paddingTop: 24, paddingBottom: 36 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between' },
   modalTitle: { color: COLORS.ink, fontSize: 23, fontWeight: '800', letterSpacing: -1, marginTop: 7 },
@@ -595,7 +753,32 @@ const styles = StyleSheet.create({
   modalCopy: { color: '#8f9e96', fontSize: 11, lineHeight: 18, marginTop: 14, marginBottom: 12 },
   inputLabel: { color: '#61736a', fontSize: 10, fontWeight: '800', marginTop: 13 },
   input: { height: 44, backgroundColor: '#fbfcfb', borderWidth: 1, borderColor: COLORS.line, borderRadius: 10, paddingHorizontal: 12, color: '#52635b', fontSize: 12, marginTop: 7 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 7 },
+  searchInput: { flex: 1, height: 44, backgroundColor: '#fbfcfb', borderWidth: 1, borderColor: COLORS.line, borderRadius: 10, paddingHorizontal: 12, color: '#52635b', fontSize: 12 },
+  searchButton: { height: 44, minWidth: 61, borderRadius: 10, backgroundColor: '#e0f1e8', alignItems: 'center', justifyContent: 'center' },
+  searchButtonText: { color: '#438d75', fontSize: 11, fontWeight: '800' },
+  searchFeedback: { color: '#5c8976', fontSize: 9, lineHeight: 14, marginTop: 7 },
+  searchFeedbackLoading: { color: '#8c9c94' },
+  searchResults: { maxHeight: 165, marginTop: 8, borderRadius: 11, borderWidth: 1, borderColor: '#dcebe2', backgroundColor: '#f8fbf8' },
+  searchResult: { paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#e5efe9' },
+  searchResultTitle: { color: '#3e5d50', fontSize: 12, fontWeight: '800' },
+  searchResultMeta: { color: '#6d8a7c', fontSize: 9, marginTop: 4 },
+  searchResultAddress: { color: '#9aa9a1', fontSize: 9, marginTop: 3 },
+  searchResultTypes: { color: '#4b987e', fontSize: 9, fontWeight: '700', marginTop: 5 },
+  selectedComplexCard: { marginTop: 10, borderRadius: 11, backgroundColor: '#e7f5ed', padding: 12 },
+  selectedComplexHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  selectedComplexLabel: { color: '#4b987e', fontSize: 9, fontWeight: '800' },
+  changeSelection: { color: '#6b8c7d', fontSize: 9, fontWeight: '700' },
+  selectedComplexName: { color: '#315d4c', fontSize: 12, fontWeight: '800', marginTop: 7 },
+  selectedComplexMeta: { color: '#6d8a7c', fontSize: 9, marginTop: 4 },
+  housingTypeOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  housingTypeChip: { borderWidth: 1, borderColor: '#dcebe2', borderRadius: 8, paddingHorizontal: 9, paddingVertical: 7, backgroundColor: '#f8fbf8' },
+  housingTypeChipSelected: { backgroundColor: '#d5eee2', borderColor: '#83c4aa' },
+  housingTypeChipText: { color: '#6b8c7d', fontSize: 9, fontWeight: '700' },
+  housingTypeChipTextSelected: { color: '#2f7d64' },
   inputDisabled: { backgroundColor: '#f0f4f1', color: '#99a69f' },
+  inputError: { borderColor: '#e39a86', backgroundColor: '#fffaf8' },
+  inputErrorText: { color: '#d47d6c', fontSize: 9, marginTop: 5 },
   inputHint: { color: '#9aa9a1', fontSize: 9, marginTop: 6 },
   historyTitle: { color: '#61736a', fontSize: 10, fontWeight: '800', marginTop: 19 },
   historyList: { marginTop: 6, backgroundColor: '#f7faf8', borderRadius: 9, paddingHorizontal: 10 },
