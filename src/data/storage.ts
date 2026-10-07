@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as KakaoUser from '@react-native-kakao/user';
+import { storeAccountData } from '@/services/account-sync';
 
 export type RankSnapshot = {
   rank: number;
@@ -6,6 +8,11 @@ export type RankSnapshot = {
 };
 
 export type PublicWaitBreakdown = {
+  label: string;
+  count: number;
+};
+
+export type VacancyBreakdown = {
   label: string;
   count: number;
 };
@@ -31,6 +38,10 @@ export type HousingApplication = {
   publicWaitBreakdown?: PublicWaitBreakdown[];
   publicWaitPreviousCount?: number;
   publicWaitUpdatedAt?: string;
+  vacancyBreakdown?: VacancyBreakdown[];
+  vacancyUpdatedAt?: string;
+  vacancyStatus?: 'synced' | 'no_data' | 'no_match' | 'error';
+  vacancyMessage?: string;
   syncStatus?: 'synced' | 'no_match' | 'error';
   syncMessage?: string;
 };
@@ -68,6 +79,7 @@ export type AppData = {
 
 const STORAGE_KEY = '@housing-tracker/app-data-v1';
 const profileListeners = new Set<(profile?: UserProfile) => void>();
+let accountSaveQueue: Promise<void> = Promise.resolve();
 
 export function subscribeToProfile(listener: (profile?: UserProfile) => void) {
   profileListeners.add(listener);
@@ -104,6 +116,20 @@ export async function loadAppData(): Promise<AppData> {
 }
 
 export async function saveAppData(data: AppData) {
+  await saveLocalAppData(data);
+  if (data.profile) {
+    accountSaveQueue = accountSaveQueue.catch(() => undefined).then(async () => {
+      const token = await KakaoUser.getAccessToken();
+      await storeAccountData(token.accessToken, data);
+    });
+    await accountSaveQueue.catch(() => {
+      // Keep local edits if the server is temporarily unreachable. They can sync
+      // again on the next save or when the account is opened on this device.
+    });
+  }
+}
+
+export async function saveLocalAppData(data: AppData) {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   profileListeners.forEach((listener) => listener(data.profile));
 }

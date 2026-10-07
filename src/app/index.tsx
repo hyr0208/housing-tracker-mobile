@@ -15,14 +15,17 @@ import {
   loadAppData,
   makeNotification,
   saveAppData,
+  saveLocalAppData,
   type AppData,
   type AppNotification,
   type HousingApplication,
 } from '@/data/storage';
 import { syncPublicWait } from '@/services/public-sync';
 import { searchComplexes, type ComplexSearchResult } from '@/services/complex-search';
+import { fetchLhVacancyStatus } from '@/services/lh-vacancy';
 import { prepareNotifications } from '@/services/notifications';
-import { clearKakaoSession, loginWithKakao } from '@/services/kakao-auth';
+import { clearKakaoSession, getKakaoAccessToken, loginWithKakao } from '@/services/kakao-auth';
+import { fetchAccountData } from '@/services/account-sync';
 import * as Notifications from 'expo-notifications';
 
 Notifications.setNotificationHandler({
@@ -54,6 +57,8 @@ type DialogState = {
   tone?: 'success' | 'error' | 'info';
   onConfirm?: () => void;
 };
+
+type StatusSheet = 'waiting' | 'vacancy' | null;
 
 function Chevron({ direction = 'right' }: { direction?: 'right' | 'down' }) {
   return <Text style={direction === 'down' ? styles.chevronDown : styles.chevron}>›</Text>;
@@ -116,6 +121,7 @@ export default function HomeScreen() {
   const [isRankOpen, setIsRankOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [statusSheet, setStatusSheet] = useState<StatusSheet>(null);
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftRank, setDraftRank] = useState('');
@@ -132,6 +138,7 @@ export default function HomeScreen() {
   const [titleInputError, setTitleInputError] = useState(false);
   const [rankInputError, setRankInputError] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isVacancySyncing, setIsVacancySyncing] = useState(false);
   const [isKakaoLoading, setIsKakaoLoading] = useState(false);
   const pushTokenRef = useRef<string | undefined>(undefined);
   const kakaoNativeAppKey = process.env.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY || '';
@@ -144,13 +151,29 @@ export default function HomeScreen() {
   const progressPercent = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
   const rankChange = selected ? selected.previousRank - selected.rank : 0;
   const publicMaxWait = Math.max(1, ...(selected?.publicWaitBreakdown?.map((item) => item.count) ?? []));
+  const vacancyTotalCount = selected?.vacancyBreakdown?.reduce((total, item) => total + item.count, 0) ?? 0;
 
   const showDialog = (title: string, message: string, options: Omit<DialogState, 'title' | 'message'> = {}) => {
     setDialog({ title, message, ...options });
   };
 
   useEffect(() => {
-    loadAppData().then((stored) => {
+    loadAppData().then(async (localData) => {
+      let stored = localData;
+      if (localData.profile) {
+        try {
+          const token = await getKakaoAccessToken();
+          const remoteData = await fetchAccountData(token);
+          if (remoteData) {
+            stored = { ...remoteData, profile: localData.profile, profileName: remoteData.profileName || localData.profile.nickname };
+            await saveLocalAppData(stored);
+          } else {
+            void saveAppData(localData);
+          }
+        } catch {
+          // Keep the on-device copy available when account sync is offline.
+        }
+      }
       setData(stored);
       setSelectedId(stored.applications[0]?.id);
       setIsReady(true);
@@ -181,7 +204,18 @@ export default function HomeScreen() {
     setIsKakaoLoading(true);
     try {
       const profile = await loginWithKakao();
-      updateData({ ...data, profile: { provider: 'kakao', id: profile.id, nickname: profile.nickname, loggedInAt: new Date().toISOString() }, profileName: profile.nickname });
+      const accountProfile = { provider: 'kakao' as const, id: profile.id, nickname: profile.nickname, loggedInAt: new Date().toISOString() };
+      let accountData = data;
+      try {
+        const token = await getKakaoAccessToken();
+        const remoteData = await fetchAccountData(token);
+        if (remoteData) accountData = remoteData;
+      } catch {
+        // Save locally and retry account sync on the next data change.
+      }
+      const next = { ...accountData, profile: accountProfile, profileName: accountProfile.nickname };
+      updateData(next);
+      setSelectedId(next.applications[0]?.id);
       setDraftProfileName(profile.nickname);
       showDialog('로그인 완료', `${profile.nickname}님, 환영해요.`, { tone: 'success' });
     } catch (error) {
@@ -245,8 +279,47 @@ export default function HomeScreen() {
     });
   };
 
+  const runVacancySync = async (application: HousingApplication) => {
+    setIsVacancySyncing(true);
+    try {
+      const result = await fetchLhVacancyStatus(application);
+      setData((current) => {
+        const next = {
+          ...current,
+          applications: current.applications.map((item) => item.id === application.id ? {
+            ...item,
+            vacancyBreakdown: result.rows,
+            vacancyUpdatedAt: result.checkedAt || new Date().toISOString(),
+            vacancyStatus: result.status,
+            vacancyMessage: result.message,
+          } : item),
+        };
+        void saveAppData(next);
+        return next;
+      });
+    } catch (error) {
+      setData((current) => {
+        const next = {
+          ...current,
+          applications: current.applications.map((item) => item.id === application.id ? {
+            ...item,
+            vacancyStatus: 'error' as const,
+            vacancyMessage: error instanceof Error ? error.message : 'LH 공가 현황 조회에 실패했어요.',
+          } : item),
+        };
+        void saveAppData(next);
+        return next;
+      });
+    } finally {
+      setIsVacancySyncing(false);
+    }
+  };
+
   useEffect(() => {
-    if (isReady && isLoggedIn && selected) void runPublicSync(selected);
+    if (isReady && isLoggedIn && selected) {
+      void runPublicSync(selected);
+      void runVacancySync(selected);
+    }
   }, [isReady, isLoggedIn, selectedId]);
 
   const toggleTask = (id: string) => {
@@ -473,25 +546,18 @@ export default function HomeScreen() {
             <HomeIllustration />
           </View>
 
-          <View style={styles.publicCard}>
-            <View style={styles.publicHeader}>
-              <View style={styles.publicCopy}>
-                <Text style={styles.cardEyebrow}>PUBLIC WAITING STATUS</Text>
-                <Text style={styles.publicTitle}>공개 대기현황</Text>
-                <Text style={styles.publicSub}>{isSyncing ? '마이홈 공개 현황을 확인하고 있어요…' : selected.syncMessage || (selected.housingType && selected.publicWaitCount !== undefined ? `${selected.housingType}형 현재 대기인원 ${selected.publicWaitCount}명` : selected.publicWaitBreakdown?.length ? '주택형별로 대기인원을 비교해보세요.' : '자동 조회를 준비하고 있어요.')}</Text>
-                {selected.syncStatus === 'synced' && <Text style={styles.autoSyncText}>● 서버가 주기적으로 확인해요</Text>}
-                {selected.publicWaitUpdatedAt && <Text style={styles.publicTime}>마지막 확인 {new Date(selected.publicWaitUpdatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text>}
-              </View>
-              <Pressable style={styles.syncButton} onPress={() => void runPublicSync(selected, pushTokenRef.current, true)} disabled={isSyncing}><Text style={styles.syncButtonText}>{isSyncing ? '확인 중' : '지금 확인'}</Text></Pressable>
+          <View style={styles.statusShortcuts}>
+            <Text style={styles.cardEyebrow}>HOUSING STATUS</Text>
+            <View style={styles.statusShortcutRow}>
+              <Pressable style={styles.statusShortcut} onPress={() => setStatusSheet('waiting')}>
+                <View style={styles.statusShortcutTop}><Text style={styles.statusShortcutTitle}>공개 대기현황</Text><Text style={styles.statusShortcutArrow}>›</Text></View>
+                <Text style={styles.statusShortcutSummary}>{isSyncing ? '현황 확인 중…' : selected.publicWaitCount !== undefined ? `현재 대기 ${selected.publicWaitCount}명` : selected.publicWaitBreakdown?.length ? `${selected.publicWaitBreakdown.length}개 주택형 확인` : '눌러서 자세히 보기'}</Text>
+              </Pressable>
+              <Pressable style={styles.statusShortcut} onPress={() => setStatusSheet('vacancy')}>
+                <View style={styles.statusShortcutTop}><Text style={styles.statusShortcutTitle}>공가현황</Text><Text style={styles.statusShortcutArrow}>›</Text></View>
+                <Text style={styles.statusShortcutSummary}>{isVacancySyncing ? '현황 확인 중…' : selected.vacancyBreakdown?.length ? `공가 ${vacancyTotalCount}호` : '눌러서 자세히 보기'}</Text>
+              </Pressable>
             </View>
-            {selected.publicWaitBreakdown && <View style={styles.breakdownPanel}>
-              <View style={styles.breakdownPanelHeader}><Text style={styles.breakdownPanelTitle}>주택형별 대기인원</Text><Text style={styles.breakdownPanelHint}>{selected.housingType ? `${selected.housingType} 선택됨` : '전체 보기'}</Text></View>
-              {selected.publicWaitBreakdown.map((item) => <View key={item.label} style={styles.typeRow}>
-                <View style={styles.typeName}><Text style={styles.typeLabel}>{item.label}</Text>{selected.housingType === item.label && <Text style={styles.myTypeLabel}>내 주택형</Text>}</View>
-                <View style={styles.typeBarTrack}><View style={[styles.typeBarFill, { width: `${Math.max(5, (item.count / publicMaxWait) * 100)}%` }]} /></View>
-                <Text style={styles.typeCount}>{item.count}명</Text>
-              </View>)}
-            </View>}
           </View>
 
           <View style={styles.progressCard}>
@@ -516,6 +582,51 @@ export default function HomeScreen() {
           </View>}
         </ScrollView>
       </SafeAreaView>
+
+      {selected && <Modal visible={statusSheet !== null} transparent animationType="slide" onRequestClose={() => setStatusSheet(null)}>
+        <View style={styles.statusSheetBackdrop}>
+          <Pressable style={styles.statusSheetDismissArea} onPress={() => setStatusSheet(null)} accessibilityLabel="닫기" />
+          <View style={[styles.statusSheet, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.cardEyebrow}>{statusSheet === 'waiting' ? 'PUBLIC WAITING STATUS' : 'LH VACANCY STATUS'}</Text>
+                <Text style={styles.modalTitle}>{statusSheet === 'waiting' ? '공개 대기현황' : '주택형별 공가현황'}</Text>
+              </View>
+              <Pressable onPress={() => setStatusSheet(null)} accessibilityLabel="닫기"><Text style={styles.closeText}>×</Text></Pressable>
+            </View>
+            <Text style={styles.sheetComplexName} numberOfLines={2}>{selected.complexName || selected.title}</Text>
+            <ScrollView style={styles.statusSheetScroll} contentContainerStyle={styles.statusSheetContent} showsVerticalScrollIndicator={false}>
+              {statusSheet === 'waiting' ? <>
+                <Text style={styles.sheetDescription}>{isSyncing ? '마이홈 공개 현황을 확인하고 있어요…' : selected.syncMessage || (selected.housingType && selected.publicWaitCount !== undefined ? `${selected.housingType}형 현재 대기인원 ${selected.publicWaitCount}명` : '주택형별로 공개된 대기인원을 확인해요.')}</Text>
+                <Pressable style={styles.sheetRefreshButton} onPress={() => void runPublicSync(selected, pushTokenRef.current, true)} disabled={isSyncing}><Text style={styles.sheetRefreshText}>{isSyncing ? '확인 중…' : '대기현황 지금 확인'}</Text></Pressable>
+                {selected.publicWaitBreakdown?.length ? <View style={styles.sheetDataPanel}>
+                  <View style={styles.breakdownPanelHeader}><Text style={styles.breakdownPanelTitle}>주택형별 대기인원</Text><Text style={styles.breakdownPanelHint}>{selected.housingType ? `${selected.housingType} 선택됨` : '전체'}</Text></View>
+                  {selected.publicWaitBreakdown.map((item) => <View key={item.label} style={styles.typeRow}>
+                    <View style={styles.typeName}><Text style={styles.typeLabel}>{item.label}</Text>{selected.housingType === item.label && <Text style={styles.myTypeLabel}>내 주택형</Text>}</View>
+                    <View style={styles.typeBarTrack}><View style={[styles.typeBarFill, { width: `${Math.max(5, (item.count / publicMaxWait) * 100)}%` }]} /></View>
+                    <Text style={styles.typeCount}>{item.count}명</Text>
+                  </View>)}
+                </View> : <Text style={styles.sheetEmpty}>{selected.syncMessage || '아직 공개 대기현황이 없어요. 다시 확인해 주세요.'}</Text>}
+                {selected.syncStatus === 'synced' && <Text style={styles.sheetFootnote}>서버가 주기적으로 확인하는 공개 대기인원이에요.</Text>}
+                {selected.publicWaitUpdatedAt && <Text style={styles.sheetUpdated}>마지막 확인 {new Date(selected.publicWaitUpdatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text>}
+              </> : <>
+                <Text style={styles.sheetDescription}>{isVacancySyncing ? 'LH 부동산맵에서 공가 호수를 확인하고 있어요…' : selected.vacancyMessage || 'LH 부동산맵에 표시되는 월말 기준 공가 현황이에요.'}</Text>
+                <Pressable style={styles.sheetRefreshButton} onPress={() => void runVacancySync(selected)} disabled={isVacancySyncing}><Text style={styles.sheetRefreshText}>{isVacancySyncing ? '확인 중…' : '공가현황 지금 확인'}</Text></Pressable>
+                {selected.vacancyBreakdown?.length ? <View style={styles.sheetDataPanel}>
+                  {selected.vacancyBreakdown.map((item) => <View key={item.label} style={styles.vacancyRow}>
+                    <Text style={styles.vacancyType}>{item.label}</Text>
+                    <Text style={styles.vacancyCount}>{item.count}<Text style={styles.vacancyUnit}>호</Text></Text>
+                  </View>)}
+                </View> : <Text style={styles.sheetEmpty}>{selected.vacancyMessage || '아직 조회된 공가 현황이 없어요. 다시 확인해 주세요.'}</Text>}
+                <Text style={styles.sheetFootnote}>공가 수는 매월 말 기준이에요. 진행 중인 모집과 하자보수 물량 등이 반영되지 않아 실제 공급 가능 호수와 다를 수 있어요.</Text>
+                {selected.vacancyUpdatedAt && <Text style={styles.sheetUpdated}>마지막 확인 {new Date(selected.vacancyUpdatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text>}
+              </>}
+            </ScrollView>
+          </View>
+          {dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}
+        </View>
+      </Modal>}
 
       <Modal visible={isAddOpen} transparent animationType="slide" onRequestClose={() => setIsAddOpen(false)}>
         <View style={styles.modalBackdrop}>
@@ -581,7 +692,7 @@ export default function HomeScreen() {
       </Modal>
 
       <Modal visible={isProfileOpen} transparent animationType="slide" onRequestClose={() => setIsProfileOpen(false)}>
-                <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>MY PROFILE</Text><Text style={styles.modalTitle}>내 정보</Text></View><Pressable onPress={() => setIsProfileOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View>{data.profile ? <><Text style={styles.loggedInLabel}>카카오로 로그인됨</Text><Text style={styles.loggedInName}>{data.profile.nickname}</Text><Text style={styles.modalCopy}>신청 내역과 알림 설정을 이 계정에 연결할 수 있어요.</Text><Pressable style={styles.outlineButton} onPress={() => { void clearKakaoSession(); updateData({ ...data, profile: undefined, profileName: undefined }); setIsProfileOpen(false); }}><Text style={styles.outlineButtonText}>로그아웃</Text></Pressable></> : <><Text style={styles.modalCopy}>카카오로 로그인하면 이 앱에서 사용하는 이름과 신청 내역을 계정에 연결할 수 있어요.</Text><Pressable style={styles.kakaoButton} disabled={!kakaoNativeAppKey || isKakaoLoading} onPress={() => void handleKakaoLogin()}><Text style={styles.kakaoButtonText}>{isKakaoLoading ? '로그인 중…' : '카카오로 로그인'}</Text></Pressable><Text style={styles.loginHint}>아직 키가 없으면 아래에서 이름만 저장해도 돼요.</Text><Text style={styles.inputLabel}>이름</Text><TextInput value={draftProfileName} onChangeText={setDraftProfileName} placeholder="예: 민지" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={() => { const name = draftProfileName.trim(); if (!name) return; updateData({ ...data, profileName: name }); setIsProfileOpen(false); }}><Text style={styles.saveButtonText}>이름만 저장하기</Text></Pressable></>}</View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</View>
+                <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>MY PROFILE</Text><Text style={styles.modalTitle}>내 정보</Text></View><Pressable onPress={() => setIsProfileOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View>{data.profile ? <><Text style={styles.loggedInLabel}>카카오로 로그인됨</Text><Text style={styles.loggedInName}>{data.profile.nickname}</Text><Text style={styles.modalCopy}>신청 내역과 알림 설정이 카카오 계정에 저장돼요.</Text><Pressable style={styles.outlineButton} onPress={() => { void clearKakaoSession(); updateData(defaultAppData); setSelectedId(undefined); setIsProfileOpen(false); }}><Text style={styles.outlineButtonText}>로그아웃</Text></Pressable></> : <><Text style={styles.modalCopy}>카카오로 로그인하면 신청 내역과 알림 설정을 계정에 저장하고 다른 기기에서도 불러올 수 있어요.</Text><Pressable style={styles.kakaoButton} disabled={!kakaoNativeAppKey || isKakaoLoading} onPress={() => void handleKakaoLogin()}><Text style={styles.kakaoButtonText}>{isKakaoLoading ? '로그인 중…' : '카카오로 로그인'}</Text></Pressable><Text style={styles.loginHint}>아직 키가 없으면 아래에서 이름만 저장해도 돼요.</Text><Text style={styles.inputLabel}>이름</Text><TextInput value={draftProfileName} onChangeText={setDraftProfileName} placeholder="예: 민지" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={() => { const name = draftProfileName.trim(); if (!name) return; updateData({ ...data, profileName: name }); setIsProfileOpen(false); }}><Text style={styles.saveButtonText}>이름만 저장하기</Text></Pressable></>}</View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</View>
       </Modal>
 
       {dialog && !isAddOpen && !isRankOpen && !isNotificationOpen && !isProfileOpen && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}
@@ -631,20 +742,24 @@ const styles = StyleSheet.create({
   changeLabel: { color: '#75a794', fontSize: 8, marginTop: 5 },
   detailButton: { marginTop: 15 },
   detailText: { color: '#38856d', fontSize: 10, fontWeight: '800' },
-  publicCard: { marginHorizontal: 16, marginTop: 12, borderRadius: 17, backgroundColor: '#f8fbf8', borderWidth: 1, borderColor: '#dcebe2', padding: 16, flexDirection: 'column', alignItems: 'stretch' },
-  publicHeader: { width: '100%', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  publicCopy: { flex: 1, paddingRight: 10 },
-  publicTitle: { color: '#3e5d50', fontSize: 15, fontWeight: '800', marginTop: 5 },
-  publicSub: { color: '#82968b', fontSize: 10, marginTop: 5, lineHeight: 15 },
+  statusShortcuts: { marginHorizontal: 16, marginTop: 12 },
+  statusShortcutRow: { flexDirection: 'row', gap: 9, marginTop: 10 },
+  statusShortcut: { flex: 1, minHeight: 70, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e4ece7', paddingHorizontal: 12, paddingVertical: 10, justifyContent: 'center' },
+  statusShortcutTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  statusShortcutTitle: { color: '#3e5d50', fontSize: 11, fontWeight: '800' },
+  statusShortcutArrow: { color: '#8da599', fontSize: 19, lineHeight: 20 },
+  statusShortcutSummary: { color: '#82968b', fontSize: 9, marginTop: 5 },
   breakdownList: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 9 },
   breakdownChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#f0f7f3', borderRadius: 7, paddingHorizontal: 6, paddingVertical: 4 },
   breakdownChipSelected: { backgroundColor: '#d5eee2' },
   breakdownLabel: { color: '#6b8c7d', fontSize: 9, fontWeight: '700' },
   breakdownCount: { color: '#39836b', fontSize: 9, fontWeight: '800' },
-  autoSyncText: { color: '#4b9b81', fontSize: 8, marginTop: 6, fontWeight: '700' },
-  publicTime: { color: '#a5b2aa', fontSize: 8, marginTop: 5 },
-  breakdownPanel: { width: '100%', marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#e5efe9' },
   breakdownPanelHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 },
+  sheetDataPanel: { width: '100%', marginTop: 15, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#edf1ee' },
+  vacancyRow: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#edf1ee' },
+  vacancyType: { color: '#587368', fontSize: 10, fontWeight: '600', flex: 1, paddingRight: 12 },
+  vacancyCount: { color: '#286f5b', fontSize: 15, fontWeight: '800' },
+  vacancyUnit: { color: '#82968b', fontSize: 9, fontWeight: '600' },
   breakdownPanelTitle: { color: '#587368', fontSize: 10, fontWeight: '800' },
   breakdownPanelHint: { color: '#9aaba2', fontSize: 9 },
   typeRow: { flexDirection: 'row', alignItems: 'center', minHeight: 25, gap: 8 },
@@ -731,6 +846,19 @@ const styles = StyleSheet.create({
   chevron: { color: '#89a494', fontSize: 24, fontWeight: '300' },
   chevronDown: { color: '#89a494', fontSize: 17 },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#203b3088' },
+  statusSheetBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#203b3066' },
+  statusSheetDismissArea: { ...StyleSheet.absoluteFillObject },
+  statusSheet: { maxHeight: '82%', backgroundColor: '#fff', borderTopLeftRadius: 25, borderTopRightRadius: 25, paddingHorizontal: 22, paddingTop: 11 },
+  sheetHandle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: '#d5dfd9', marginBottom: 15 },
+  sheetComplexName: { color: '#7f9087', fontSize: 10, marginTop: 8 },
+  statusSheetScroll: { flexGrow: 0, maxHeight: 470, marginTop: 8 },
+  statusSheetContent: { paddingBottom: 10 },
+  sheetDescription: { color: '#82968b', fontSize: 11, lineHeight: 17, marginTop: 8 },
+  sheetRefreshButton: { minHeight: 43, borderRadius: 11, backgroundColor: '#e0f1e8', alignItems: 'center', justifyContent: 'center', marginTop: 14 },
+  sheetRefreshText: { color: '#438d75', fontSize: 11, fontWeight: '800' },
+  sheetEmpty: { color: '#9aa9a1', fontSize: 11, lineHeight: 17, textAlign: 'center', paddingVertical: 24 },
+  sheetFootnote: { color: '#9aaba2', fontSize: 9, lineHeight: 14, marginTop: 12 },
+  sheetUpdated: { color: '#a5b2aa', fontSize: 9, marginTop: 10 },
   dialogLayer: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: '#203b3055', paddingHorizontal: 30, zIndex: 20 },
   dialogBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#203b3055', paddingHorizontal: 30 },
   dialogCard: { width: '100%', borderRadius: 18, backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14, shadowColor: '#24483a', shadowOpacity: 0.18, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 8 },

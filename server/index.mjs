@@ -3,10 +3,12 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fetchWaitingRows, findMatchingRows, searchComplexRows } from './myhome-api.mjs';
+import { fetchVacancyStatus } from './lh-vacancy-api.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const stateDir = path.join(__dirname, 'data');
 const statePath = path.join(stateDir, 'sync-state.json');
+const accountsPath = path.join(stateDir, 'account-data.json');
 const port = Number(process.env.PORT || 8787);
 const syncIntervalMs = Number(process.env.SYNC_INTERVAL_MINUTES || 60) * 60 * 1000;
 const runOnce = process.argv.includes('--once');
@@ -24,11 +26,36 @@ async function writeState(state) {
   await fs.writeFile(statePath, JSON.stringify(state, null, 2));
 }
 
+async function readAccounts() {
+  try {
+    return JSON.parse(await fs.readFile(accountsPath, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+async function writeAccounts(accounts) {
+  await fs.mkdir(stateDir, { recursive: true });
+  await fs.writeFile(accountsPath, JSON.stringify(accounts, null, 2));
+}
+
+async function getKakaoUserId(request) {
+  const authorization = request.headers.authorization || '';
+  const accessToken = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
+  if (!accessToken) return null;
+  const response = await fetch('https://kapi.kakao.com/v2/user/me', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) return null;
+  const user = await response.json();
+  return user.id ? String(user.id) : null;
+}
+
 function sendJson(response, status, body) {
   response.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   });
   response.end(JSON.stringify(body));
 }
@@ -124,7 +151,7 @@ async function syncAll() {
 
 const server = http.createServer(async (request, response) => {
   if (request.method === 'OPTIONS') {
-    response.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type' });
+    response.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' });
     response.end();
     return;
   }
@@ -133,6 +160,28 @@ const server = http.createServer(async (request, response) => {
   try {
     if (request.method === 'GET' && url.pathname === '/health') {
       sendJson(response, 200, { ok: true, service: 'public-waiting-sync' });
+      return;
+    }
+
+    if ((request.method === 'GET' || request.method === 'PUT') && url.pathname === '/api/account') {
+      const userId = await getKakaoUserId(request);
+      if (!userId) {
+        sendJson(response, 401, { error: '유효한 카카오 로그인이 필요합니다.' });
+        return;
+      }
+      const accounts = await readAccounts();
+      if (request.method === 'GET') {
+        sendJson(response, 200, { data: accounts[userId] ?? null });
+        return;
+      }
+      const data = await readBody(request);
+      if (!Array.isArray(data.applications) || !Array.isArray(data.tasks) || !Array.isArray(data.notifications)) {
+        sendJson(response, 400, { error: '저장할 계정 정보 형식이 올바르지 않습니다.' });
+        return;
+      }
+      accounts[userId] = data;
+      await writeAccounts(accounts);
+      sendJson(response, 200, { ok: true });
       return;
     }
 
@@ -158,6 +207,21 @@ const server = http.createServer(async (request, response) => {
       }
       const rows = await fetchWaitingRows({ brtcCode, searchKeyword: keyword });
       sendJson(response, 200, { results: searchComplexRows(rows, { keyword, brtcCode }) });
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/vacancy-status') {
+      const application = {
+        complexName: url.searchParams.get('complexName') || '',
+        title: url.searchParams.get('title') || '',
+        area: url.searchParams.get('area') || '',
+        brtcCode: url.searchParams.get('brtcCode') || '',
+      };
+      if (!application.complexName || !application.brtcCode) {
+        sendJson(response, 400, { error: '단지명과 지역 정보가 필요합니다.' });
+        return;
+      }
+      sendJson(response, 200, await fetchVacancyStatus(application));
       return;
     }
 

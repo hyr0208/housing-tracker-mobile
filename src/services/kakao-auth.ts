@@ -50,3 +50,9 @@ export async function clearKakaoSession() {
   await ensureKakaoSDK();
   if (await KakaoUser.isLogined()) await KakaoUser.logout();
 }
+
+export async function getKakaoAccessToken(): Promise<string> {
+  await ensureKakaoSDK();
+  const token = await KakaoUser.getAccessToken();
+  return token.accessToken;
+}
