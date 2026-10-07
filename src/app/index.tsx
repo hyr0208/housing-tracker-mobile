@@ -527,10 +527,7 @@ export default function HomeScreen() {
               </View>
               <Pressable onPress={() => setIsAddOpen(false)}><Text style={styles.closeText}>×</Text></Pressable>
             </View>
-            <Text style={styles.modalCopy}>지역과 공고명 일부를 검색하면 공식 단지명과 주택형을 불러올 수 있어요. 예비순번은 이력 보존을 위해 별도로 관리해요.</Text>
-            <Text style={styles.inputLabel}>공고명</Text>
-            <TextInput value={draftTitle} onChangeText={(value) => { setDraftTitle(value); setTitleInputError(false); }} placeholder="예: 행복주택 공고명" placeholderTextColor="#a9b4ae" style={[styles.input, titleInputError && styles.inputError]} />
-            {titleInputError && <Text style={styles.inputErrorText}>공고명을 입력해주세요.</Text>}
+            <Text style={styles.modalCopy}>지역과 공고·단지를 먼저 검색해 공식 정보를 선택한 뒤 공고명을 입력해주세요. 예비순번은 이력 보존을 위해 별도로 관리해요.</Text>
             <Text style={styles.inputLabel}>지역</Text>
             <TextInput value={draftArea} onChangeText={(value) => { setDraftArea(value); setSelectedComplex(undefined); }} placeholder="예: 경기 성남시" placeholderTextColor="#a9b4ae" style={styles.input} />
             <Text style={styles.inputLabel}>공고·단지 검색</Text>
@@ -556,6 +553,9 @@ export default function HomeScreen() {
               <Text style={styles.inputLabel}>공식 단지명 (검색 실패 시 직접 입력)</Text>
               <TextInput value={draftComplexName} onChangeText={setDraftComplexName} placeholder="공식 단지명을 직접 입력할 수 있어요" placeholderTextColor="#a9b4ae" style={styles.input} />
             </>}
+            <Text style={styles.inputLabel}>공고명</Text>
+            <TextInput value={draftTitle} onChangeText={(value) => { setDraftTitle(value); setTitleInputError(false); }} placeholder="예: 행복주택 공고명" placeholderTextColor="#a9b4ae" style={[styles.input, titleInputError && styles.inputError]} />
+            {titleInputError && <Text style={styles.inputErrorText}>공고명을 입력해주세요.</Text>}
             <Text style={styles.inputLabel}>주택형 (선택)</Text>
             <TextInput value={draftHousingType} onChangeText={setDraftHousingType} placeholder="예: 21A 또는 26A" placeholderTextColor="#a9b4ae" style={styles.input} />
             {selectedComplex && selectedComplex.housingTypes.length > 0 && <View style={styles.housingTypeOptions}>
