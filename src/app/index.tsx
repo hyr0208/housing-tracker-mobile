@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SymbolView } from 'expo-symbols';
 import { useRouter } from 'expo-router';
 import {
   defaultAppData,
@@ -521,7 +522,7 @@ export default function HomeScreen() {
                 <Text style={styles.profileInitial}>{profileName ? profileName.slice(0, 1) : '내'}</Text>
               </Pressable>
               <Pressable style={styles.notification} accessibilityLabel="알림" onPress={() => isLoggedIn ? setIsNotificationOpen(true) : setIsProfileOpen(true)}>
-                <Text style={styles.bell}>♧</Text>
+                <SymbolView name={{ ios: 'bell', android: 'notifications', web: 'notifications' }} size={18} weight="medium" tintColor="#6e8178" />
                 {isLoggedIn && data.notifications.some((item) => !item.read) && <View style={styles.notificationDot} />}
               </Pressable>
             </View>
@@ -719,7 +720,6 @@ const styles = StyleSheet.create({
   loginHint: { color: '#a0aca5', fontSize: 9, textAlign: 'center', marginTop: 10 },
   outlineButton: { height: 47, borderRadius: 11, borderWidth: 1, borderColor: '#dbe8e0', alignItems: 'center', justifyContent: 'center', marginTop: 16 },
   outlineButtonText: { color: '#568a75', fontSize: 12, fontWeight: '800' },
-  bell: { color: '#6e8178', fontSize: 20, transform: [{ rotate: '180deg' }] },
   notificationDot: { position: 'absolute', top: 6, right: 7, width: 6, height: 6, borderRadius: 4, backgroundColor: '#ee9575', borderWidth: 1.5, borderColor: '#fff' },
   greetingBlock: { paddingHorizontal: 22, paddingTop: 12, paddingBottom: 23 },
   dateLabel: { color: '#9aa9a1', fontSize: 9, fontWeight: '800', letterSpacing: 1.2 },
