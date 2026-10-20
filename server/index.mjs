@@ -11,6 +11,13 @@ const stateDir = path.join(__dirname, 'data');
 const statePath = path.join(stateDir, 'sync-state.json');
 const accountsPath = path.join(stateDir, 'account-data.json');
 const appleTokensPath = path.join(stateDir, 'apple-tokens.json');
+const publicDir = path.join(__dirname, 'public');
+// 앱스토어·플레이스토어에 등록하는 개인정보 처리방침과 계정 삭제 안내 페이지
+const publicPages = {
+  '/privacy': ['privacy.html', 'text/html; charset=utf-8'],
+  '/account-deletion': ['account-deletion.html', 'text/html; charset=utf-8'],
+  '/style.css': ['style.css', 'text/css; charset=utf-8'],
+};
 const port = Number(process.env.PORT || 8787);
 const syncIntervalMs = Number(process.env.SYNC_INTERVAL_MINUTES || 60) * 60 * 1000;
 const runOnce = process.argv.includes('--once');
@@ -224,6 +231,14 @@ const server = http.createServer(async (request, response) => {
 
   const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
   try {
+    const page = publicPages[url.pathname.replace(/\/$/, '')];
+    if (request.method === 'GET' && page) {
+      const [file, contentType] = page;
+      response.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=300' });
+      response.end(await fs.readFile(path.join(publicDir, file)));
+      return;
+    }
+
     if (request.method === 'GET' && url.pathname === '/health') {
       sendJson(response, 200, { ok: true, service: 'public-waiting-sync' });
       return;
