@@ -23,6 +23,7 @@ import {
   type AppNotification,
   type HousingApplication,
 } from '@/data/storage';
+import { AddTaskSheet } from '@/components/add-task-sheet';
 import { syncPublicWait } from '@/services/public-sync';
 import { searchComplexes, type ComplexSearchResult } from '@/services/complex-search';
 import { fetchLhVacancyStatus } from '@/services/lh-vacancy';
@@ -122,6 +123,7 @@ export default function HomeScreen() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingApplicationId, setEditingApplicationId] = useState<string | undefined>();
   const [isRankOpen, setIsRankOpen] = useState(false);
+  const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [statusSheet, setStatusSheet] = useState<StatusSheet>(null);
@@ -581,7 +583,7 @@ export default function HomeScreen() {
             {applications.map((item) => <Pressable key={item.id} onPress={() => setSelectedId(item.id)} style={[styles.applicationCard, selectedId === item.id && styles.applicationSelected]}><View style={styles.applicationCardHeader}><View style={[styles.appIcon, { backgroundColor: item.color }]}><Text style={styles.appInitials}>{item.initials}</Text></View><Pressable style={styles.editApplicationButton} onPress={() => openEditApplication(item)}><Text style={styles.editApplicationText}>수정</Text></Pressable></View><Text style={styles.appTitle} numberOfLines={1}>{item.title}</Text><Text style={styles.appMeta}>{item.type}</Text><View style={styles.appRankLine}><Text style={styles.appRank}>{item.rank}<Text style={styles.appRankUnit}>번</Text></Text>{item.rank !== item.previousRank ? <Text style={styles.upTag}>↓ {item.previousRank - item.rank}</Text> : <Text style={styles.sameTag}>변동 없음</Text>}</View><Text style={styles.appUpdated}>{item.updatedAt}</Text></Pressable>)}
           </ScrollView>
 
-          <View style={styles.lowerHeader}><View><Text style={styles.cardEyebrow}>NEXT STEPS</Text><Text style={styles.sectionTitle}>준비할 일 <Text style={styles.taskCount}>{completed}/{tasks.length}</Text></Text></View><Pressable onPress={() => updateData({ ...data, tasks: [...tasks, { id: `task-${Date.now()}`, title: '이사 예상 비용 계산하기', detail: '전체 신청 · 아직 시작하지 않음', done: false }] })}><Text style={styles.moreText}>할 일 추가  ＋</Text></Pressable></View>
+          <View style={styles.lowerHeader}><View><Text style={styles.cardEyebrow}>NEXT STEPS</Text><Text style={styles.sectionTitle}>준비할 일 <Text style={styles.taskCount}>{completed}/{tasks.length}</Text></Text></View><Pressable onPress={() => setIsAddTaskOpen(true)}><Text style={styles.moreText}>할 일 추가  ＋</Text></Pressable></View>
           <View style={styles.taskCard}>{tasks.map((task) => <Pressable key={task.id} onPress={() => toggleTask(task.id)} style={styles.taskRow}><View style={[styles.checkbox, task.done && styles.checkboxDone]}>{task.done && <Text style={styles.checkMark}>✓</Text>}</View><View style={styles.taskText}><Text style={[styles.taskTitle, task.done && styles.taskDone]}>{task.title}</Text><Text style={styles.taskDetail}>{task.detail}</Text></View></Pressable>)}</View>
 
           <View style={styles.tipBanner}><View style={styles.tipCircle}><Text style={styles.tipSpark}>✦</Text></View><View style={{ flex: 1 }}><Text style={styles.tipTitle}>이번 주의 팁</Text><Text style={styles.tipBody}>순번이 20번대라면 서류를 미리 준비해두세요.</Text></View><Chevron /></View>
@@ -699,6 +701,11 @@ export default function HomeScreen() {
       {selected && <Modal visible={isRankOpen} transparent animationType="slide" onRequestClose={() => setIsRankOpen(false)}>
         <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsRankOpen(false)} accessibilityLabel="닫기" /><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>UPDATE RANK</Text><Text style={styles.modalTitle}>현재 순번 기록</Text></View><Pressable onPress={() => setIsRankOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>{selected.title}의 공고문이나 대기현황에서 확인한 최신 순번을 입력하세요.</Text><Text style={styles.inputLabel}>현재 예비순번</Text><TextInput value={draftRank} onChangeText={setDraftRank} keyboardType="number-pad" placeholder="예: 24" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Text style={styles.historyTitle}>최근 순번 이력</Text><View style={styles.historyList}>{selected.history.slice(-3).reverse().map((snapshot) => <View key={`${snapshot.recordedAt}-${snapshot.rank}`} style={styles.historyRow}><Text style={styles.historyDate}>{snapshot.recordedAt}</Text><Text style={styles.historyRank}>{snapshot.rank}번</Text></View>)}</View><Pressable style={styles.saveButton} onPress={saveRank}><Text style={styles.saveButtonText}>순번 업데이트 저장  →</Text></Pressable></View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
       </Modal>}
+
+      <AddTaskSheet visible={isAddTaskOpen} onClose={() => setIsAddTaskOpen(false)} onAdd={(title, detail) => {
+        updateData({ ...data, tasks: [...tasks, { id: `task-${Date.now()}`, title, detail: detail || '직접 추가한 준비 항목', done: false }] });
+        setIsAddTaskOpen(false);
+      }} />
 
       <Modal visible={isNotificationOpen} transparent animationType="slide" onRequestClose={() => setIsNotificationOpen(false)}>
         <View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsNotificationOpen(false)} accessibilityLabel="닫기" /><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>NOTIFICATIONS</Text><Text style={styles.modalTitle}>알림 센터</Text></View><Pressable onPress={() => setIsNotificationOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><ScrollView style={styles.notificationList}>{data.notifications.length === 0 ? <Text style={styles.emptyText}>아직 알림이 없어요.</Text> : data.notifications.map((item) => <View key={item.id} style={styles.notificationRow}><View style={styles.notificationIcon}><Text style={styles.tipSpark}>✦</Text></View><View style={styles.notificationCopy}><Text style={styles.notificationTitle}>{item.title}</Text><Text style={styles.notificationBody}>{item.body}</Text><Text style={styles.notificationTime}>{item.createdAt}</Text></View></View>)}</ScrollView><Pressable style={styles.saveButton} onPress={() => { updateData({ ...data, notifications: data.notifications.map((item) => ({ ...item, read: true })) }); setIsNotificationOpen(false); }}><Text style={styles.saveButtonText}>모두 읽음 처리</Text></Pressable></View></View>
