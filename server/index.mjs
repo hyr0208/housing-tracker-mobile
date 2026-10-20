@@ -135,6 +135,47 @@ async function syncApplication(application) {
   return { id: application.id, status: 'synced', changed, publicWaitCount: nextWaitCount, previousWaitCount, publicWaitBreakdown, matched: row };
 }
 
+function formatVacancyLabel(label) {
+  // '21A(지역전략산업종사자)' → '21A형(지역전략산업종사자)'
+  return String(label).replace(/^(\d+[A-Za-z0-9]*)(?![A-Za-z0-9형])/, '$1형');
+}
+
+function describeVacancyChanges(previousRows, nextRows) {
+  const previous = new Map(previousRows.map((row) => [row.label, row.count]));
+  const next = new Map(nextRows.map((row) => [row.label, row.count]));
+  const labels = [...new Set([...previous.keys(), ...next.keys()])];
+  return labels
+    .filter((label) => (previous.get(label) ?? 0) !== (next.get(label) ?? 0))
+    .map((label) => `${formatVacancyLabel(label)} ${previous.get(label) ?? 0}호 → ${next.get(label) ?? 0}호`);
+}
+
+async function syncVacancy(application) {
+  const result = await fetchVacancyStatus(application);
+  if (result.status === 'no_match') return { id: application.id, status: 'no_match', changed: false };
+
+  const state = await readState();
+  const current = state.applications[application.id];
+  if (!current) return { id: application.id, status: 'removed', changed: false };
+
+  const previousRows = current.vacancyRows;
+  const changes = Array.isArray(previousRows) ? describeVacancyChanges(previousRows, result.rows) : [];
+  state.applications[application.id] = {
+    ...current,
+    vacancyRows: result.rows,
+    vacancyPreviousRows: previousRows,
+    vacancyCheckedAt: new Date().toISOString(),
+  };
+  await writeState(state);
+
+  if (changes.length > 0) {
+    const summary = changes.length > 2 ? `${changes.slice(0, 2).join(', ')} 외 ${changes.length - 2}건` : changes.join(', ');
+    const body = `공가 호수가 바뀌었어요: ${summary}`;
+    await sendExpoPush(current.pushToken, `${result.complexName} 공가현황 변동`, body);
+  }
+
+  return { id: application.id, status: result.status, changed: changes.length > 0, changes };
+}
+
 async function syncAll() {
   const state = await readState();
   const registrations = Object.values(state.applications);
@@ -144,6 +185,13 @@ async function syncAll() {
       results.push(await syncApplication(application));
     } catch (error) {
       results.push({ id: application.id, status: 'error', message: error instanceof Error ? error.message : '동기화 오류' });
+    }
+    // 공가현황은 대기현황 조회 실패와 별개로 확인한다.
+    try {
+      const vacancy = await syncVacancy(application);
+      results.push({ ...vacancy, type: 'vacancy' });
+    } catch (error) {
+      results.push({ id: application.id, type: 'vacancy', status: 'error', message: error instanceof Error ? error.message : '공가현황 확인 오류' });
     }
   }
   return results;
