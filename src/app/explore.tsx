@@ -59,7 +59,7 @@ export default function ApplicationsScreen() {
         </ScrollView>
       </SafeAreaView>
       {selectedItem && <Modal visible transparent animationType="slide" onRequestClose={() => setSelectedItem(undefined)}>
-        <View style={styles.modalBackdrop}>
+        <View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setSelectedItem(undefined)} accessibilityLabel="닫기" />
           <View style={styles.detailModal}>
             <View style={styles.modalHeader}><View><Text style={styles.eyebrow}>APPLICATION DETAIL</Text><Text style={styles.modalTitle}>신청 내역 상세</Text></View><Pressable onPress={() => setSelectedItem(undefined)}><Text style={styles.closeText}>×</Text></Pressable></View>
             <View style={styles.detailHero}><View style={[styles.detailIcon, { backgroundColor: selectedItem.color }]}><Text style={styles.iconText}>{selectedItem.initials}</Text></View><View style={styles.detailHeroCopy}><Text style={styles.detailTitle}>{selectedItem.title}</Text><Text style={styles.detailMeta}>{selectedItem.type} · {selectedItem.area}</Text></View></View>
