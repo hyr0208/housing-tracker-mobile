@@ -1,8 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
-import { defaultAppData, loadAppData, saveAppData, type AppData, type ChecklistTask } from '@/data/storage';
+import { defaultAppData, loadAppData, saveAppData, subscribeToAppData, type AppData, type ChecklistTask } from '@/data/storage';
 
 type Filter = 'all' | 'active' | 'done';
 
@@ -25,6 +25,7 @@ export default function ChecklistScreen() {
   }, []);
 
   useFocusEffect(reload);
+  useEffect(() => subscribeToAppData(setData), []);
 
   const completed = data.tasks.filter((task) => task.done).length;
   const progress = data.tasks.length ? Math.round((completed / data.tasks.length) * 100) : 0;

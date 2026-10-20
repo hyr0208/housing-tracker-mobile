@@ -79,11 +79,18 @@ export type AppData = {
 
 const STORAGE_KEY = '@housing-tracker/app-data-v1';
 const profileListeners = new Set<(profile?: UserProfile) => void>();
+const dataListeners = new Set<(data: AppData) => void>();
 let accountSaveQueue: Promise<void> = Promise.resolve();
 
 export function subscribeToProfile(listener: (profile?: UserProfile) => void) {
   profileListeners.add(listener);
   return () => { profileListeners.delete(listener); };
+}
+
+// 화면마다 AppData 사본을 들고 있으므로, 한 화면에서 저장하면 다른 화면도 최신 값으로 맞춘다.
+export function subscribeToAppData(listener: (data: AppData) => void) {
+  dataListeners.add(listener);
+  return () => { dataListeners.delete(listener); };
 }
 
 export const defaultAppData: AppData = {
@@ -132,6 +139,7 @@ export async function saveAppData(data: AppData) {
 export async function saveLocalAppData(data: AppData) {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   profileListeners.forEach((listener) => listener(data.profile));
+  dataListeners.forEach((listener) => listener(data));
 }
 
 export function makeNotification(title: string, body: string): AppNotification {

@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import {
   defaultAppData,
   loadAppData,
+  subscribeToAppData,
   makeNotification,
   saveAppData,
   saveLocalAppData,
@@ -182,6 +183,8 @@ export default function HomeScreen() {
       setIsReady(true);
     });
   }, []);
+
+  useEffect(() => subscribeToAppData(setData), []);
 
   useEffect(() => {
     if (!isReady) return;
