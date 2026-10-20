@@ -11,6 +11,14 @@ export async function fetchAccountData(accessToken: string): Promise<AppData | n
   return result.data;
 }
 
+export async function deleteAccountData(accessToken: string): Promise<void> {
+  const response = await fetch(`${syncServerUrl}/api/account`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) throw new Error('서버에 저장된 계정 정보를 삭제하지 못했어요. 잠시 후 다시 시도해주세요.');
+}
+
 export async function storeAccountData(accessToken: string, data: AppData): Promise<void> {
   const response = await fetch(`${syncServerUrl}/api/account`, {
     method: 'PUT',

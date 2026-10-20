@@ -51,6 +51,12 @@ export async function clearKakaoSession() {
   if (await KakaoUser.isLogined()) await KakaoUser.logout();
 }
 
+// 카카오 계정과 앱의 연결을 끊는다. 다음 로그인 때 동의 절차를 다시 거친다.
+export async function unlinkKakao() {
+  await ensureKakaoSDK();
+  await KakaoUser.unlink();
+}
+
 export async function getKakaoAccessToken(): Promise<string> {
   await ensureKakaoSDK();
   const token = await KakaoUser.getAccessToken();

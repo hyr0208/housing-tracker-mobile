@@ -28,8 +28,8 @@ import { syncPublicWait } from '@/services/public-sync';
 import { searchComplexes, type ComplexSearchResult } from '@/services/complex-search';
 import { fetchLhVacancyStatus } from '@/services/lh-vacancy';
 import { prepareNotifications } from '@/services/notifications';
-import { clearKakaoSession, getKakaoAccessToken, loginWithKakao } from '@/services/kakao-auth';
-import { fetchAccountData } from '@/services/account-sync';
+import { clearKakaoSession, getKakaoAccessToken, loginWithKakao, unlinkKakao } from '@/services/kakao-auth';
+import { deleteAccountData, fetchAccountData } from '@/services/account-sync';
 import * as Notifications from 'expo-notifications';
 
 Notifications.setNotificationHandler({
@@ -124,6 +124,7 @@ export default function HomeScreen() {
   const [editingApplicationId, setEditingApplicationId] = useState<string | undefined>();
   const [isRankOpen, setIsRankOpen] = useState(false);
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [statusSheet, setStatusSheet] = useState<StatusSheet>(null);
@@ -231,6 +232,32 @@ export default function HomeScreen() {
     } finally {
       setIsKakaoLoading(false);
     }
+  };
+
+  const deleteAccount = () => {
+    showDialog('계정을 삭제할까요?', '서버에 저장된 신청 내역·체크리스트·알림 설정과 이 기기의 데이터가 모두 삭제되고, 카카오 계정 연결도 해제돼요. 삭제한 정보는 되돌릴 수 없어요.', {
+      tone: 'error',
+      cancelLabel: '취소',
+      confirmLabel: '계정 삭제',
+      destructive: true,
+      onConfirm: () => void (async () => {
+        setIsDeletingAccount(true);
+        try {
+          const token = await getKakaoAccessToken();
+          await deleteAccountData(token);
+          // 서버 데이터는 이미 지웠으므로, 카카오 연결 해제가 실패해도 기기 정리는 계속한다.
+          await unlinkKakao().catch(() => clearKakaoSession().catch(() => undefined));
+          updateData(defaultAppData);
+          setSelectedId(undefined);
+          setIsProfileOpen(false);
+          showDialog('계정을 삭제했어요', '그동안 이용해주셔서 감사해요.', { tone: 'success' });
+        } catch (error) {
+          showDialog('계정 삭제 실패', error instanceof Error ? error.message : '잠시 후 다시 시도해주세요.', { tone: 'error' });
+        } finally {
+          setIsDeletingAccount(false);
+        }
+      })(),
+    });
   };
 
   const weekday = useMemo(() => {
@@ -712,7 +739,7 @@ export default function HomeScreen() {
       </Modal>
 
       <Modal visible={isProfileOpen} transparent animationType="slide" onRequestClose={() => setIsProfileOpen(false)}>
-                <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsProfileOpen(false)} accessibilityLabel="닫기" /><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>MY PROFILE</Text><Text style={styles.modalTitle}>내 정보</Text></View><Pressable onPress={() => setIsProfileOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View>{data.profile ? <><Text style={styles.loggedInLabel}>카카오로 로그인됨</Text><Text style={styles.loggedInName}>{data.profile.nickname}</Text><Text style={styles.modalCopy}>신청 내역과 알림 설정이 카카오 계정에 저장돼요.</Text><Pressable style={styles.outlineButton} onPress={() => { void clearKakaoSession(); updateData(defaultAppData); setSelectedId(undefined); setIsProfileOpen(false); }}><Text style={styles.outlineButtonText}>로그아웃</Text></Pressable></> : <><Text style={styles.modalCopy}>카카오로 로그인하면 신청 내역과 알림 설정을 계정에 저장하고 다른 기기에서도 불러올 수 있어요.</Text><Pressable style={styles.kakaoButton} disabled={!kakaoNativeAppKey || isKakaoLoading} onPress={() => void handleKakaoLogin()}><Text style={styles.kakaoButtonText}>{isKakaoLoading ? '로그인 중…' : '카카오로 로그인'}</Text></Pressable><Text style={styles.loginHint}>아직 키가 없으면 아래에서 이름만 저장해도 돼요.</Text><Text style={styles.inputLabel}>이름</Text><TextInput value={draftProfileName} onChangeText={setDraftProfileName} placeholder="예: 민지" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={() => { const name = draftProfileName.trim(); if (!name) return; updateData({ ...data, profileName: name }); setIsProfileOpen(false); }}><Text style={styles.saveButtonText}>이름만 저장하기</Text></Pressable></>}</View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
+                <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsProfileOpen(false)} accessibilityLabel="닫기" /><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>MY PROFILE</Text><Text style={styles.modalTitle}>내 정보</Text></View><Pressable onPress={() => setIsProfileOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View>{data.profile ? <><Text style={styles.loggedInLabel}>카카오로 로그인됨</Text><Text style={styles.loggedInName}>{data.profile.nickname}</Text><Text style={styles.modalCopy}>신청 내역과 알림 설정이 카카오 계정에 저장돼요.</Text><Pressable style={styles.outlineButton} onPress={() => { void clearKakaoSession(); updateData(defaultAppData); setSelectedId(undefined); setIsProfileOpen(false); }}><Text style={styles.outlineButtonText}>로그아웃</Text></Pressable><Pressable style={styles.deleteAccountButton} onPress={deleteAccount} disabled={isDeletingAccount}><Text style={styles.deleteAccountText}>{isDeletingAccount ? '계정 삭제 중…' : '계정 삭제'}</Text></Pressable></> : <><Text style={styles.modalCopy}>카카오로 로그인하면 신청 내역과 알림 설정을 계정에 저장하고 다른 기기에서도 불러올 수 있어요.</Text><Pressable style={styles.kakaoButton} disabled={!kakaoNativeAppKey || isKakaoLoading} onPress={() => void handleKakaoLogin()}><Text style={styles.kakaoButtonText}>{isKakaoLoading ? '로그인 중…' : '카카오로 로그인'}</Text></Pressable><Text style={styles.loginHint}>아직 키가 없으면 아래에서 이름만 저장해도 돼요.</Text><Text style={styles.inputLabel}>이름</Text><TextInput value={draftProfileName} onChangeText={setDraftProfileName} placeholder="예: 민지" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={() => { const name = draftProfileName.trim(); if (!name) return; updateData({ ...data, profileName: name }); setIsProfileOpen(false); }}><Text style={styles.saveButtonText}>이름만 저장하기</Text></Pressable></>}</View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
       </Modal>
 
       {dialog && !isAddOpen && !isRankOpen && !isNotificationOpen && !isProfileOpen && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}
@@ -739,6 +766,8 @@ const styles = StyleSheet.create({
   loginHint: { color: '#a0aca5', fontSize: 9, textAlign: 'center', marginTop: 10 },
   outlineButton: { height: 47, borderRadius: 11, borderWidth: 1, borderColor: '#dbe8e0', alignItems: 'center', justifyContent: 'center', marginTop: 16 },
   outlineButtonText: { color: '#568a75', fontSize: 12, fontWeight: '800' },
+  deleteAccountButton: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 16, marginTop: 8 },
+  deleteAccountText: { color: '#c0806f', fontSize: 11, fontWeight: '700', textDecorationLine: 'underline' },
   notificationDot: { position: 'absolute', top: 6, right: 7, width: 6, height: 6, borderRadius: 4, backgroundColor: '#ee9575', borderWidth: 1.5, borderColor: '#fff' },
   greetingBlock: { paddingHorizontal: 22, paddingTop: 12, paddingBottom: 23 },
   dateLabel: { color: '#9aa9a1', fontSize: 9, fontWeight: '800', letterSpacing: 1.2 },

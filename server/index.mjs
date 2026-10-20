@@ -199,7 +199,7 @@ async function syncAll() {
 
 const server = http.createServer(async (request, response) => {
   if (request.method === 'OPTIONS') {
-    response.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' });
+    response.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS' });
     response.end();
     return;
   }
@@ -211,7 +211,7 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
-    if ((request.method === 'GET' || request.method === 'PUT') && url.pathname === '/api/account') {
+    if ((request.method === 'GET' || request.method === 'PUT' || request.method === 'DELETE') && url.pathname === '/api/account') {
       const userId = await getKakaoUserId(request);
       if (!userId) {
         sendJson(response, 401, { error: '유효한 카카오 로그인이 필요합니다.' });
@@ -220,6 +220,19 @@ const server = http.createServer(async (request, response) => {
       const accounts = await readAccounts();
       if (request.method === 'GET') {
         sendJson(response, 200, { data: accounts[userId] ?? null });
+        return;
+      }
+      if (request.method === 'DELETE') {
+        // 계정 데이터와 함께, 알림용으로 등록된 신청 정보(푸시 토큰 포함)도 지운다.
+        const applicationIds = (accounts[userId]?.applications ?? []).map((application) => application.id).filter(Boolean);
+        delete accounts[userId];
+        await writeAccounts(accounts);
+        if (applicationIds.length > 0) {
+          const state = await readState();
+          for (const id of applicationIds) delete state.applications[id];
+          await writeState(state);
+        }
+        sendJson(response, 200, { ok: true, removedApplications: applicationIds.length });
         return;
       }
       const data = await readBody(request);
