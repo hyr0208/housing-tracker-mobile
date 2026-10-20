@@ -43,7 +43,7 @@ export default function AppTabs() {
       {isLoggedIn && <NativeTabs.Trigger name="checklist">
           <NativeTabs.Trigger.Label>체크리스트</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/explore.png')}
+          src={require('@/assets/images/tabIcons/checklist.png')}
           renderingMode="template"
         />
       </NativeTabs.Trigger>}
