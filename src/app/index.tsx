@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   ScrollView,
@@ -134,6 +135,7 @@ export default function HomeScreen() {
   const [searchResults, setSearchResults] = useState<ComplexSearchResult[]>([]);
   const [selectedComplex, setSelectedComplex] = useState<ComplexSearchResult | undefined>();
   const [searchFeedback, setSearchFeedback] = useState('');
+  const [isSearchFailed, setIsSearchFailed] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [draftProfileName, setDraftProfileName] = useState('');
   const [titleInputError, setTitleInputError] = useState(false);
@@ -339,6 +341,7 @@ export default function HomeScreen() {
     setSearchResults([]);
     setSelectedComplex(undefined);
     setSearchFeedback('');
+    setIsSearchFailed(false);
     setTitleInputError(false);
     setRankInputError(false);
     setIsAddOpen(true);
@@ -356,6 +359,7 @@ export default function HomeScreen() {
     setSearchResults([]);
     setSelectedComplex(undefined);
     setSearchFeedback('');
+    setIsSearchFailed(false);
     setTitleInputError(false);
     setRankInputError(false);
     setIsAddOpen(true);
@@ -369,6 +373,7 @@ export default function HomeScreen() {
       return;
     }
     setIsSearching(true);
+    setIsSearchFailed(false);
     setSearchFeedback('공식 공고를 찾고 있어요…');
     try {
       const results = await searchComplexes(keyword, brtcCode);
@@ -376,7 +381,9 @@ export default function HomeScreen() {
       setSearchFeedback(results.length > 0 ? `${results.length}개의 공식 단지를 찾았어요. 하나를 선택해주세요.` : '검색 결과가 없어요. 지역이나 검색어를 조금 바꿔보세요.');
     } catch (error) {
       const message = error instanceof Error ? error.message : '잠시 후 다시 시도해주세요.';
-      setSearchFeedback(message);
+      setSearchResults([]);
+      setIsSearchFailed(true);
+      setSearchFeedback(`${message} 검색이 계속 안 되면 아래에 단지명을 직접 입력해주세요.`);
       showDialog('공고 검색 실패', message, { tone: 'error' });
     } finally {
       setIsSearching(false);
@@ -630,8 +637,8 @@ export default function HomeScreen() {
       </Modal>}
 
       <Modal visible={isAddOpen} transparent animationType="slide" onRequestClose={() => setIsAddOpen(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+        <KeyboardAvoidingView behavior="padding" style={[styles.modalBackdrop, { paddingTop: insets.top + 12 }]}>
+          <View style={[styles.modalCard, styles.formModalCard]}>
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.cardEyebrow}>{editingApplicationId ? 'EDIT APPLICATION' : 'NEW APPLICATION'}</Text>
@@ -639,6 +646,7 @@ export default function HomeScreen() {
               </View>
               <Pressable onPress={() => setIsAddOpen(false)}><Text style={styles.closeText}>×</Text></Pressable>
             </View>
+            <ScrollView style={styles.formModalScroll} contentContainerStyle={styles.formModalContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false}>
             <Text style={styles.modalCopy}>지역과 공고·단지를 먼저 검색해 공식 정보를 선택한 뒤 공고명을 입력해주세요. 예비순번은 이력 보존을 위해 별도로 관리해요.</Text>
             <Text style={styles.inputLabel}>지역</Text>
             <TextInput value={draftArea} onChangeText={(value) => { setDraftArea(value); setSelectedComplex(undefined); }} placeholder="예: 경기 성남시" placeholderTextColor="#a9b4ae" style={styles.input} />
@@ -648,7 +656,7 @@ export default function HomeScreen() {
               <Pressable style={styles.searchButton} onPress={() => void searchOfficialComplexes()} disabled={isSearching}><Text style={styles.searchButtonText}>{isSearching ? '검색 중' : '검색'}</Text></Pressable>
             </View>
             <Text style={styles.inputHint}>지역을 먼저 입력해야 정확한 공식 공고를 찾을 수 있어요.</Text>
-            {!!searchFeedback && <Text style={[styles.searchFeedback, isSearching && styles.searchFeedbackLoading]}>{searchFeedback}</Text>}
+            {!!searchFeedback && <Text style={[styles.searchFeedback, isSearching && styles.searchFeedbackLoading, isSearchFailed && styles.searchFeedbackError]}>{searchFeedback}</Text>}
             {searchResults.length > 0 && <ScrollView style={styles.searchResults} nestedScrollEnabled keyboardShouldPersistTaps="handled">
               {searchResults.map((result) => <Pressable key={result.id} style={styles.searchResult} onPress={() => chooseOfficialComplex(result)}>
                 <Text style={styles.searchResultTitle}>{result.complexName}</Text>
@@ -679,13 +687,14 @@ export default function HomeScreen() {
             {editingApplicationId && <Text style={styles.inputHint}>순번을 바꾸려면 홈 카드의 ‘순번 업데이트’를 이용해주세요.</Text>}
             <Pressable style={styles.saveButton} onPress={saveApplication}><Text style={styles.saveButtonText}>{editingApplicationId ? '변경사항 저장하기  →' : '신청 내역 저장하기  →'}</Text></Pressable>
             {editingApplicationId && <Pressable style={styles.deleteButton} onPress={() => deleteApplication(editingApplicationId)}><Text style={styles.deleteButtonText}>이 신청 내역 삭제하기</Text></Pressable>}
+            </ScrollView>
           </View>
           {dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {selected && <Modal visible={isRankOpen} transparent animationType="slide" onRequestClose={() => setIsRankOpen(false)}>
-        <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>UPDATE RANK</Text><Text style={styles.modalTitle}>현재 순번 기록</Text></View><Pressable onPress={() => setIsRankOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>{selected.title}의 공고문이나 대기현황에서 확인한 최신 순번을 입력하세요.</Text><Text style={styles.inputLabel}>현재 예비순번</Text><TextInput value={draftRank} onChangeText={setDraftRank} keyboardType="number-pad" placeholder="예: 24" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Text style={styles.historyTitle}>최근 순번 이력</Text><View style={styles.historyList}>{selected.history.slice(-3).reverse().map((snapshot) => <View key={`${snapshot.recordedAt}-${snapshot.rank}`} style={styles.historyRow}><Text style={styles.historyDate}>{snapshot.recordedAt}</Text><Text style={styles.historyRank}>{snapshot.rank}번</Text></View>)}</View><Pressable style={styles.saveButton} onPress={saveRank}><Text style={styles.saveButtonText}>순번 업데이트 저장  →</Text></Pressable></View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</View>
+        <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>UPDATE RANK</Text><Text style={styles.modalTitle}>현재 순번 기록</Text></View><Pressable onPress={() => setIsRankOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>{selected.title}의 공고문이나 대기현황에서 확인한 최신 순번을 입력하세요.</Text><Text style={styles.inputLabel}>현재 예비순번</Text><TextInput value={draftRank} onChangeText={setDraftRank} keyboardType="number-pad" placeholder="예: 24" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Text style={styles.historyTitle}>최근 순번 이력</Text><View style={styles.historyList}>{selected.history.slice(-3).reverse().map((snapshot) => <View key={`${snapshot.recordedAt}-${snapshot.rank}`} style={styles.historyRow}><Text style={styles.historyDate}>{snapshot.recordedAt}</Text><Text style={styles.historyRank}>{snapshot.rank}번</Text></View>)}</View><Pressable style={styles.saveButton} onPress={saveRank}><Text style={styles.saveButtonText}>순번 업데이트 저장  →</Text></Pressable></View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
       </Modal>}
 
       <Modal visible={isNotificationOpen} transparent animationType="slide" onRequestClose={() => setIsNotificationOpen(false)}>
@@ -693,7 +702,7 @@ export default function HomeScreen() {
       </Modal>
 
       <Modal visible={isProfileOpen} transparent animationType="slide" onRequestClose={() => setIsProfileOpen(false)}>
-                <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>MY PROFILE</Text><Text style={styles.modalTitle}>내 정보</Text></View><Pressable onPress={() => setIsProfileOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View>{data.profile ? <><Text style={styles.loggedInLabel}>카카오로 로그인됨</Text><Text style={styles.loggedInName}>{data.profile.nickname}</Text><Text style={styles.modalCopy}>신청 내역과 알림 설정이 카카오 계정에 저장돼요.</Text><Pressable style={styles.outlineButton} onPress={() => { void clearKakaoSession(); updateData(defaultAppData); setSelectedId(undefined); setIsProfileOpen(false); }}><Text style={styles.outlineButtonText}>로그아웃</Text></Pressable></> : <><Text style={styles.modalCopy}>카카오로 로그인하면 신청 내역과 알림 설정을 계정에 저장하고 다른 기기에서도 불러올 수 있어요.</Text><Pressable style={styles.kakaoButton} disabled={!kakaoNativeAppKey || isKakaoLoading} onPress={() => void handleKakaoLogin()}><Text style={styles.kakaoButtonText}>{isKakaoLoading ? '로그인 중…' : '카카오로 로그인'}</Text></Pressable><Text style={styles.loginHint}>아직 키가 없으면 아래에서 이름만 저장해도 돼요.</Text><Text style={styles.inputLabel}>이름</Text><TextInput value={draftProfileName} onChangeText={setDraftProfileName} placeholder="예: 민지" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={() => { const name = draftProfileName.trim(); if (!name) return; updateData({ ...data, profileName: name }); setIsProfileOpen(false); }}><Text style={styles.saveButtonText}>이름만 저장하기</Text></Pressable></>}</View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</View>
+                <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>MY PROFILE</Text><Text style={styles.modalTitle}>내 정보</Text></View><Pressable onPress={() => setIsProfileOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View>{data.profile ? <><Text style={styles.loggedInLabel}>카카오로 로그인됨</Text><Text style={styles.loggedInName}>{data.profile.nickname}</Text><Text style={styles.modalCopy}>신청 내역과 알림 설정이 카카오 계정에 저장돼요.</Text><Pressable style={styles.outlineButton} onPress={() => { void clearKakaoSession(); updateData(defaultAppData); setSelectedId(undefined); setIsProfileOpen(false); }}><Text style={styles.outlineButtonText}>로그아웃</Text></Pressable></> : <><Text style={styles.modalCopy}>카카오로 로그인하면 신청 내역과 알림 설정을 계정에 저장하고 다른 기기에서도 불러올 수 있어요.</Text><Pressable style={styles.kakaoButton} disabled={!kakaoNativeAppKey || isKakaoLoading} onPress={() => void handleKakaoLogin()}><Text style={styles.kakaoButtonText}>{isKakaoLoading ? '로그인 중…' : '카카오로 로그인'}</Text></Pressable><Text style={styles.loginHint}>아직 키가 없으면 아래에서 이름만 저장해도 돼요.</Text><Text style={styles.inputLabel}>이름</Text><TextInput value={draftProfileName} onChangeText={setDraftProfileName} placeholder="예: 민지" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={() => { const name = draftProfileName.trim(); if (!name) return; updateData({ ...data, profileName: name }); setIsProfileOpen(false); }}><Text style={styles.saveButtonText}>이름만 저장하기</Text></Pressable></>}</View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
       </Modal>
 
       {dialog && !isAddOpen && !isRankOpen && !isNotificationOpen && !isProfileOpen && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}
@@ -875,6 +884,9 @@ const styles = StyleSheet.create({
   dialogConfirmDanger: { backgroundColor: '#d98471' },
   dialogConfirmText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   modalCard: { backgroundColor: '#fff', borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 22, paddingTop: 24, paddingBottom: 36 },
+  formModalCard: { flexShrink: 1, paddingBottom: 0 },
+  formModalScroll: { flexGrow: 0, flexShrink: 1 },
+  formModalContent: { paddingBottom: 36 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between' },
   modalTitle: { color: COLORS.ink, fontSize: 23, fontWeight: '800', letterSpacing: -1, marginTop: 7 },
   closeText: { color: '#93a099', fontSize: 28, lineHeight: 28 },
@@ -887,6 +899,7 @@ const styles = StyleSheet.create({
   searchButtonText: { color: '#438d75', fontSize: 11, fontWeight: '800' },
   searchFeedback: { color: '#5c8976', fontSize: 9, lineHeight: 14, marginTop: 7 },
   searchFeedbackLoading: { color: '#8c9c94' },
+  searchFeedbackError: { color: '#d47d6c' },
   searchResults: { maxHeight: 165, marginTop: 8, borderRadius: 11, borderWidth: 1, borderColor: '#dcebe2', backgroundColor: '#f8fbf8' },
   searchResult: { paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#e5efe9' },
   searchResultTitle: { color: '#3e5d50', fontSize: 12, fontWeight: '800' },

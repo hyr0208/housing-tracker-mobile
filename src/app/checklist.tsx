@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { defaultAppData, loadAppData, saveAppData, type AppData, type ChecklistTask } from '@/data/storage';
@@ -88,7 +88,7 @@ export default function ChecklistScreen() {
       </SafeAreaView>
 
       <Modal visible={isAddOpen} transparent animationType="slide" onRequestClose={() => setIsAddOpen(false)}>
-        <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.eyebrow}>NEW CHECKLIST ITEM</Text><Text style={styles.modalTitle}>준비할 일 추가</Text></View><Pressable onPress={() => setIsAddOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>입주 준비에 필요한 일을 직접 기록해두세요.</Text><Text style={styles.inputLabel}>할 일</Text><TextInput value={draftTitle} onChangeText={setDraftTitle} placeholder="예: 주민등록 이전 준비" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Text style={styles.inputLabel}>메모 (선택)</Text><TextInput value={draftDetail} onChangeText={setDraftDetail} placeholder="예: 필요한 서류를 확인해요" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={addTask}><Text style={styles.saveButtonText}>체크리스트에 추가하기  →</Text></Pressable></View></View>
+        <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.eyebrow}>NEW CHECKLIST ITEM</Text><Text style={styles.modalTitle}>준비할 일 추가</Text></View><Pressable onPress={() => setIsAddOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>입주 준비에 필요한 일을 직접 기록해두세요.</Text><Text style={styles.inputLabel}>할 일</Text><TextInput value={draftTitle} onChangeText={setDraftTitle} placeholder="예: 주민등록 이전 준비" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Text style={styles.inputLabel}>메모 (선택)</Text><TextInput value={draftDetail} onChangeText={setDraftDetail} placeholder="예: 필요한 서류를 확인해요" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={addTask}><Text style={styles.saveButtonText}>체크리스트에 추가하기  →</Text></Pressable></View></KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={Boolean(dialog)} transparent animationType="fade" onRequestClose={() => setDialog(null)}>
