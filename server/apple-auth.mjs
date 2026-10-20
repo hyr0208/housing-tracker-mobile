@@ -31,8 +31,14 @@ export async function verifyAppleIdentityToken(identityToken) {
   const [encodedHeader, encodedPayload, encodedSignature] = String(identityToken || '').split('.');
   if (!encodedHeader || !encodedPayload || !encodedSignature) throw new Error('Apple 로그인 정보가 올바르지 않아요.');
 
-  const header = JSON.parse(base64UrlDecode(encodedHeader).toString('utf8'));
-  const payload = JSON.parse(base64UrlDecode(encodedPayload).toString('utf8'));
+  let header;
+  let payload;
+  try {
+    header = JSON.parse(base64UrlDecode(encodedHeader).toString('utf8'));
+    payload = JSON.parse(base64UrlDecode(encodedPayload).toString('utf8'));
+  } catch {
+    throw new Error('Apple 로그인 정보가 올바르지 않아요.');
+  }
   if (header.alg !== 'RS256') throw new Error('지원하지 않는 Apple 토큰 형식이에요.');
 
   let jwk = (await fetchAppleKeys()).find((key) => key.kid === header.kid);
