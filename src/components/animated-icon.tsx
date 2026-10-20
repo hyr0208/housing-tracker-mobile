@@ -33,7 +33,8 @@ export function AnimatedSplashOverlay() {
     },
   });
 
-  const image = <Image style={styles.image} source={require('@/assets/images/expo-logo.png')} />;
+  // 네이티브 스플래시(app.json의 expo-splash-screen 설정)와 같은 화면을 이어서 보여주고 서서히 사라지게 한다.
+  const image = <Image style={styles.splashImage} source={require('@/assets/images/splash-icon.png')} />;
 
   return animate ? (
     <Animated.View
@@ -138,9 +139,13 @@ const styles = StyleSheet.create({
     height: 128,
     position: 'absolute',
   },
+  splashImage: {
+    width: 250,
+    height: 250,
+  },
   splashOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#208AEF',
+    backgroundColor: '#E1F2EA',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,
