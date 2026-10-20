@@ -9,7 +9,11 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/images/icon.png",
-      "bundleIdentifier": "com.anonymous.housing-tracker"
+      "bundleIdentifier": "kr.co.uulab.housingtracker",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "appleTeamId": "N99FMBQ662"
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +23,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.housingtracker"
+      "package": "kr.co.uulab.housingtracker"
     },
     "web": {
       "output": "static",
@@ -40,6 +44,25 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "3e443a1f-709c-4bc5-bc2b-f0f85fd54e7d"
+      }
+    },
+    "owner": "uulab-official",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_ERROR_RECOVERY",
+      "fallbackToCacheTimeout": 0,
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      },
+      "url": "https://u.expo.dev/3e443a1f-709c-4bc5-bc2b-f0f85fd54e7d"
     }
   }
 }

@@ -47,3 +47,11 @@ example
 # generated native folders
 /ios
 /android
+
+# local EAS build output
+/build
+/build-ios.ipa
+*.ipa
+*.aab
+*.apk
+housing-tracker-nas.zip

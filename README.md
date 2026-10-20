@@ -126,8 +126,8 @@ EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY=
 
 | 플랫폼 | 값 |
 | --- | --- |
-| iOS 번들 ID | `com.anonymous.housing-tracker` |
-| Android 패키지명 | `com.anonymous.housingtracker` |
+| iOS 번들 ID | `kr.co.uulab.housingtracker` |
+| Android 패키지명 | `kr.co.uulab.housingtracker` |
 
 카카오 로그인을 활성화하고 `profile_nickname` 동의항목을 설정한 뒤 네이티브 앱 키를 `.env`에 입력합니다.
 

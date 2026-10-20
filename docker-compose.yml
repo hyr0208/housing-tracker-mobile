@@ -1,0 +1,16 @@
+services:
+  housing-tracker-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: housing-tracker-api
+    restart: unless-stopped
+    environment:
+      PORT: "8787"
+      SYNC_INTERVAL_MINUTES: "60"
+      MYHOME_API_KEY: ${MYHOME_API_KEY:?Set MYHOME_API_KEY in the project environment}
+    ports:
+      - "8787:8787"
+    volumes:
+      - ./data:/app/server/data
+
