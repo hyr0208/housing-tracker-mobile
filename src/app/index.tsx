@@ -22,13 +22,17 @@ import {
   type AppData,
   type AppNotification,
   type HousingApplication,
+  type UserProfile,
 } from '@/data/storage';
 import { AddTaskSheet } from '@/components/add-task-sheet';
 import { syncPublicWait } from '@/services/public-sync';
 import { searchComplexes, type ComplexSearchResult } from '@/services/complex-search';
 import { fetchLhVacancyStatus } from '@/services/lh-vacancy';
 import { prepareNotifications } from '@/services/notifications';
-import { clearKakaoSession, getKakaoAccessToken, loginWithKakao, unlinkKakao } from '@/services/kakao-auth';
+import { loginWithKakao } from '@/services/kakao-auth';
+import { isAppleSignInAvailable, loginWithApple } from '@/services/apple-auth';
+import { clearAccountSession, getAccountToken, unlinkAccount } from '@/services/account-auth';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { deleteAccountData, fetchAccountData } from '@/services/account-sync';
 import * as Notifications from 'expo-notifications';
 
@@ -147,6 +151,8 @@ export default function HomeScreen() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isVacancySyncing, setIsVacancySyncing] = useState(false);
   const [isKakaoLoading, setIsKakaoLoading] = useState(false);
+  const [isAppleLoading, setIsAppleLoading] = useState(false);
+  const [canUseAppleSignIn, setCanUseAppleSignIn] = useState(false);
   const pushTokenRef = useRef<string | undefined>(undefined);
   const kakaoNativeAppKey = process.env.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY || '';
   const applications = data.applications;
@@ -169,7 +175,7 @@ export default function HomeScreen() {
       let stored = localData;
       if (localData.profile) {
         try {
-          const token = await getKakaoAccessToken();
+          const token = await getAccountToken(localData.profile);
           const remoteData = await fetchAccountData(token);
           if (remoteData) {
             stored = { ...remoteData, profile: localData.profile, profileName: remoteData.profileName || localData.profile.nickname };
@@ -190,6 +196,10 @@ export default function HomeScreen() {
   useEffect(() => subscribeToAppData(setData), []);
 
   useEffect(() => {
+    isAppleSignInAvailable().then(setCanUseAppleSignIn).catch(() => setCanUseAppleSignIn(false));
+  }, []);
+
+  useEffect(() => {
     if (!isReady) return;
     let active = true;
     prepareNotifications().then((token) => {
@@ -205,6 +215,36 @@ export default function HomeScreen() {
     return () => { active = false; };
   }, [isReady]);
 
+  // 로그인 후 서버에 저장된 계정 데이터가 있으면 불러오고, 없으면 지금 기기 데이터를 계정에 저장한다.
+  const completeLogin = async (accountProfile: UserProfile) => {
+    let accountData = data;
+    try {
+      const remoteData = await fetchAccountData(await getAccountToken(accountProfile));
+      if (remoteData) accountData = remoteData;
+    } catch {
+      // Save locally and retry account sync on the next data change.
+    }
+    const nickname = accountData.profileName || accountProfile.nickname;
+    const next = { ...accountData, profile: { ...accountProfile, nickname }, profileName: nickname };
+    updateData(next);
+    setSelectedId(next.applications[0]?.id);
+    setDraftProfileName(nickname);
+    showDialog('로그인 완료', `${nickname}님, 환영해요.`, { tone: 'success' });
+  };
+
+  const handleAppleLogin = async () => {
+    setIsAppleLoading(true);
+    try {
+      const profile = await loginWithApple();
+      if (!profile) return;
+      await completeLogin({ provider: 'apple', id: profile.id, nickname: profile.nickname, loggedInAt: new Date().toISOString() });
+    } catch (error) {
+      showDialog('Apple 로그인 실패', error instanceof Error ? error.message : '로그인 중 오류가 발생했어요.', { tone: 'error' });
+    } finally {
+      setIsAppleLoading(false);
+    }
+  };
+
   const handleKakaoLogin = async () => {
     if (!kakaoNativeAppKey) {
       showDialog('카카오 키가 필요해요', '.env에 EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY를 입력해주세요.', { tone: 'info' });
@@ -213,20 +253,7 @@ export default function HomeScreen() {
     setIsKakaoLoading(true);
     try {
       const profile = await loginWithKakao();
-      const accountProfile = { provider: 'kakao' as const, id: profile.id, nickname: profile.nickname, loggedInAt: new Date().toISOString() };
-      let accountData = data;
-      try {
-        const token = await getKakaoAccessToken();
-        const remoteData = await fetchAccountData(token);
-        if (remoteData) accountData = remoteData;
-      } catch {
-        // Save locally and retry account sync on the next data change.
-      }
-      const next = { ...accountData, profile: accountProfile, profileName: accountProfile.nickname };
-      updateData(next);
-      setSelectedId(next.applications[0]?.id);
-      setDraftProfileName(profile.nickname);
-      showDialog('로그인 완료', `${profile.nickname}님, 환영해요.`, { tone: 'success' });
+      await completeLogin({ provider: 'kakao', id: profile.id, nickname: profile.nickname, loggedInAt: new Date().toISOString() });
     } catch (error) {
       showDialog('카카오 로그인 실패', error instanceof Error ? error.message : '로그인 중 오류가 발생했어요.', { tone: 'error' });
     } finally {
@@ -243,10 +270,11 @@ export default function HomeScreen() {
       onConfirm: () => void (async () => {
         setIsDeletingAccount(true);
         try {
-          const token = await getKakaoAccessToken();
-          await deleteAccountData(token);
-          // 서버 데이터는 이미 지웠으므로, 카카오 연결 해제가 실패해도 기기 정리는 계속한다.
-          await unlinkKakao().catch(() => clearKakaoSession().catch(() => undefined));
+          const profile = data.profile;
+          if (!profile) return;
+          await deleteAccountData(await getAccountToken(profile));
+          // 서버 데이터는 이미 지웠으므로, 로그인 연결 정리가 실패해도 기기 정리는 계속한다.
+          await unlinkAccount(profile).catch(() => undefined);
           updateData(defaultAppData);
           setSelectedId(undefined);
           setIsProfileOpen(false);
@@ -739,7 +767,7 @@ export default function HomeScreen() {
       </Modal>
 
       <Modal visible={isProfileOpen} transparent animationType="slide" onRequestClose={() => setIsProfileOpen(false)}>
-                <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsProfileOpen(false)} accessibilityLabel="닫기" /><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>MY PROFILE</Text><Text style={styles.modalTitle}>내 정보</Text></View><Pressable onPress={() => setIsProfileOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View>{data.profile ? <><Text style={styles.loggedInLabel}>카카오로 로그인됨</Text><Text style={styles.loggedInName}>{data.profile.nickname}</Text><Text style={styles.modalCopy}>신청 내역과 알림 설정이 카카오 계정에 저장돼요.</Text><Pressable style={styles.outlineButton} onPress={() => { void clearKakaoSession(); updateData(defaultAppData); setSelectedId(undefined); setIsProfileOpen(false); }}><Text style={styles.outlineButtonText}>로그아웃</Text></Pressable><Pressable style={styles.deleteAccountButton} onPress={deleteAccount} disabled={isDeletingAccount}><Text style={styles.deleteAccountText}>{isDeletingAccount ? '계정 삭제 중…' : '계정 삭제'}</Text></Pressable></> : <><Text style={styles.modalCopy}>카카오로 로그인하면 신청 내역과 알림 설정을 계정에 저장하고 다른 기기에서도 불러올 수 있어요.</Text><Pressable style={styles.kakaoButton} disabled={!kakaoNativeAppKey || isKakaoLoading} onPress={() => void handleKakaoLogin()}><Text style={styles.kakaoButtonText}>{isKakaoLoading ? '로그인 중…' : '카카오로 로그인'}</Text></Pressable><Text style={styles.loginHint}>아직 키가 없으면 아래에서 이름만 저장해도 돼요.</Text><Text style={styles.inputLabel}>이름</Text><TextInput value={draftProfileName} onChangeText={setDraftProfileName} placeholder="예: 민지" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={() => { const name = draftProfileName.trim(); if (!name) return; updateData({ ...data, profileName: name }); setIsProfileOpen(false); }}><Text style={styles.saveButtonText}>이름만 저장하기</Text></Pressable></>}</View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
+                <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsProfileOpen(false)} accessibilityLabel="닫기" /><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>MY PROFILE</Text><Text style={styles.modalTitle}>내 정보</Text></View><Pressable onPress={() => setIsProfileOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View>{data.profile ? <><Text style={styles.loggedInLabel}>{data.profile.provider === 'apple' ? 'Apple로 로그인됨' : '카카오로 로그인됨'}</Text><Text style={styles.loggedInName}>{data.profile.nickname}</Text><Text style={styles.modalCopy}>신청 내역과 알림 설정이 내 계정에 저장돼요.</Text><Pressable style={styles.outlineButton} onPress={() => { if (data.profile) void clearAccountSession(data.profile).catch(() => undefined); updateData(defaultAppData); setSelectedId(undefined); setIsProfileOpen(false); }}><Text style={styles.outlineButtonText}>로그아웃</Text></Pressable><Pressable style={styles.deleteAccountButton} onPress={deleteAccount} disabled={isDeletingAccount}><Text style={styles.deleteAccountText}>{isDeletingAccount ? '계정 삭제 중…' : '계정 삭제'}</Text></Pressable></> : <><Text style={styles.modalCopy}>로그인하면 신청 내역과 알림 설정을 계정에 저장하고 다른 기기에서도 불러올 수 있어요.</Text>{canUseAppleSignIn && <AppleAuthentication.AppleAuthenticationButton buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN} buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK} cornerRadius={11} style={[styles.appleButton, isAppleLoading && styles.appleButtonLoading]} onPress={() => { if (!isAppleLoading) void handleAppleLogin(); }} />}<Pressable style={styles.kakaoButton} disabled={!kakaoNativeAppKey || isKakaoLoading} onPress={() => void handleKakaoLogin()}><Text style={styles.kakaoButtonText}>{isKakaoLoading ? '로그인 중…' : '카카오로 로그인'}</Text></Pressable><Text style={styles.loginHint}>아직 키가 없으면 아래에서 이름만 저장해도 돼요.</Text><Text style={styles.inputLabel}>이름</Text><TextInput value={draftProfileName} onChangeText={setDraftProfileName} placeholder="예: 민지" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={() => { const name = draftProfileName.trim(); if (!name) return; updateData({ ...data, profileName: name }); setIsProfileOpen(false); }}><Text style={styles.saveButtonText}>이름만 저장하기</Text></Pressable></>}</View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
       </Modal>
 
       {dialog && !isAddOpen && !isRankOpen && !isNotificationOpen && !isProfileOpen && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}
@@ -761,6 +789,8 @@ const styles = StyleSheet.create({
   profileInitial: { color: '#3b8068', fontSize: 14, fontWeight: '800' },
   loggedInLabel: { color: '#4b987e', fontSize: 11, fontWeight: '800', marginTop: 22 },
   loggedInName: { color: COLORS.ink, fontSize: 24, fontWeight: '800', marginTop: 8 },
+  appleButton: { width: '100%', height: 47, marginTop: 14 },
+  appleButtonLoading: { opacity: 0.5 },
   kakaoButton: { height: 47, borderRadius: 11, backgroundColor: '#FEE500', alignItems: 'center', justifyContent: 'center', marginTop: 14 },
   kakaoButtonText: { color: '#191919', fontSize: 12, fontWeight: '800' },
   loginHint: { color: '#a0aca5', fontSize: 9, textAlign: 'center', marginTop: 10 },

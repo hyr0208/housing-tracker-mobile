@@ -4,11 +4,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fetchWaitingRows, findMatchingRows, searchComplexRows } from './myhome-api.mjs';
 import { fetchVacancyStatus } from './lh-vacancy-api.mjs';
+import { createSessionToken, exchangeAuthorizationCode, revokeAppleToken, verifyAppleIdentityToken, verifySessionToken } from './apple-auth.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const stateDir = path.join(__dirname, 'data');
 const statePath = path.join(stateDir, 'sync-state.json');
 const accountsPath = path.join(stateDir, 'account-data.json');
+const appleTokensPath = path.join(stateDir, 'apple-tokens.json');
 const port = Number(process.env.PORT || 8787);
 const syncIntervalMs = Number(process.env.SYNC_INTERVAL_MINUTES || 60) * 60 * 1000;
 const runOnce = process.argv.includes('--once');
@@ -39,10 +41,26 @@ async function writeAccounts(accounts) {
   await fs.writeFile(accountsPath, JSON.stringify(accounts, null, 2));
 }
 
-async function getKakaoUserId(request) {
+async function readAppleTokens() {
+  try {
+    return JSON.parse(await fs.readFile(appleTokensPath, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+async function writeAppleTokens(tokens) {
+  await fs.mkdir(stateDir, { recursive: true });
+  await fs.writeFile(appleTokensPath, JSON.stringify(tokens, null, 2), { mode: 0o600 });
+}
+
+// Apple 로그인 사용자는 서버 로그인 토큰('hts.'), 카카오 사용자는 카카오 access token으로 확인한다.
+// 카카오 계정 ID는 기존 데이터와 호환되도록 접두어 없이, Apple 계정은 'apple:<sub>'로 구분한다.
+async function getUserId(request) {
   const authorization = request.headers.authorization || '';
   const accessToken = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!accessToken) return null;
+  if (accessToken.startsWith('hts.')) return verifySessionToken(stateDir, accessToken);
   const response = await fetch('https://kapi.kakao.com/v2/user/me', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -211,10 +229,30 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === 'POST' && url.pathname === '/api/auth/apple') {
+      const { identityToken, authorizationCode } = await readBody(request);
+      let apple;
+      try {
+        apple = await verifyAppleIdentityToken(identityToken);
+      } catch (error) {
+        sendJson(response, 401, { error: error instanceof Error ? error.message : 'Apple 로그인 확인에 실패했어요.' });
+        return;
+      }
+      const userId = `apple:${apple.sub}`;
+      const refreshToken = await exchangeAuthorizationCode(stateDir, authorizationCode).catch(() => null);
+      if (refreshToken) {
+        const appleTokens = await readAppleTokens();
+        appleTokens[userId] = refreshToken;
+        await writeAppleTokens(appleTokens);
+      }
+      sendJson(response, 200, { token: await createSessionToken(stateDir, userId), userId });
+      return;
+    }
+
     if ((request.method === 'GET' || request.method === 'PUT' || request.method === 'DELETE') && url.pathname === '/api/account') {
-      const userId = await getKakaoUserId(request);
+      const userId = await getUserId(request);
       if (!userId) {
-        sendJson(response, 401, { error: '유효한 카카오 로그인이 필요합니다.' });
+        sendJson(response, 401, { error: '유효한 로그인이 필요합니다.' });
         return;
       }
       const accounts = await readAccounts();
@@ -227,6 +265,12 @@ const server = http.createServer(async (request, response) => {
         const applicationIds = (accounts[userId]?.applications ?? []).map((application) => application.id).filter(Boolean);
         delete accounts[userId];
         await writeAccounts(accounts);
+        if (userId.startsWith('apple:')) {
+          const appleTokens = await readAppleTokens();
+          await revokeAppleToken(stateDir, appleTokens[userId]).catch(() => false);
+          delete appleTokens[userId];
+          await writeAppleTokens(appleTokens);
+        }
         if (applicationIds.length > 0) {
           const state = await readState();
           for (const id of applicationIds) delete state.applications[id];

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as KakaoUser from '@react-native-kakao/user';
+import { getAccountToken } from '@/services/account-auth';
 import { storeAccountData } from '@/services/account-sync';
 
 export type RankSnapshot = {
@@ -62,7 +62,7 @@ export type AppNotification = {
 };
 
 export type UserProfile = {
-  provider: 'kakao';
+  provider: 'kakao' | 'apple';
   id: string;
   nickname: string;
   loggedInAt: string;
@@ -125,9 +125,9 @@ export async function loadAppData(): Promise<AppData> {
 export async function saveAppData(data: AppData) {
   await saveLocalAppData(data);
   if (data.profile) {
+    const profile = data.profile;
     accountSaveQueue = accountSaveQueue.catch(() => undefined).then(async () => {
-      const token = await KakaoUser.getAccessToken();
-      await storeAccountData(token.accessToken, data);
+      await storeAccountData(await getAccountToken(profile), data);
     });
     await accountSaveQueue.catch(() => {
       // Keep local edits if the server is temporarily unreachable. They can sync
