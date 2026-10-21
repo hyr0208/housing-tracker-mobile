@@ -25,7 +25,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "kr.co.uulab.housingtracker"
+      "package": "kr.co.uulab.housingtracker",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
