@@ -36,6 +36,7 @@
       "expo-router",
       "expo-notifications",
       "expo-apple-authentication",
+      "./plugins/with-scene-lifecycle",
       [
         "expo-splash-screen",
         {
