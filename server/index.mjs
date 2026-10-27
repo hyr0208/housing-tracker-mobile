@@ -154,7 +154,11 @@ async function syncApplication(application) {
   await writeState(state);
 
   if (changed) {
-    await sendExpoPush(incoming.pushToken, `${row.hsmpNm} ${housingTypeText} 대기현황 변동`, `${housingTypeText} 대기인원이 ${previousWaitCount}명 → ${nextWaitCount}명으로 변경됐어요.`);
+    const decrease = previousWaitCount - nextWaitCount;
+    const body = decrease > 0
+      ? `${housingTypeText} 대기인원이 ${previousWaitCount}명 → ${nextWaitCount}명으로 줄었어요. 내 순번도 최대 ${decrease}칸 앞당겨졌을 수 있어요.`
+      : `${housingTypeText} 대기인원이 ${previousWaitCount}명 → ${nextWaitCount}명으로 변경됐어요.`;
+    await sendExpoPush(incoming.pushToken, `${row.hsmpNm} ${housingTypeText} 대기현황 변동`, body);
   }
 
   return { id: application.id, status: 'synced', changed, publicWaitCount: nextWaitCount, previousWaitCount, publicWaitBreakdown, matched: row };

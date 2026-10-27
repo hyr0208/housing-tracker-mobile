@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -44,6 +45,8 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 });
+
+const LH_APPLY_URL = 'https://apply.lh.or.kr';
 
 const COLORS = {
   ink: '#243b34',
@@ -163,6 +166,8 @@ export default function HomeScreen() {
   const completed = tasks.filter((task) => task.done).length;
   const progressPercent = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
   const rankChange = selected ? selected.previousRank - selected.rank : 0;
+  // 개인 예비순번은 공개 API로 알 수 없어서, 대기인원이 줄어든 만큼 앞당겨졌다고 추정한다.
+  const estimatedRank = selected?.waitAdvance ? Math.max(1, selected.rank - selected.waitAdvance) : undefined;
   const publicMaxWait = Math.max(1, ...(selected?.publicWaitBreakdown?.map((item) => item.count) ?? []));
   const vacancyTotalCount = selected?.vacancyBreakdown?.reduce((total, item) => total + item.count, 0) ?? 0;
 
@@ -312,7 +317,10 @@ export default function HomeScreen() {
     if (result.changed && typeof result.publicWaitCount === 'number' && typeof result.previousWaitCount === 'number') {
       const housingTypeText = formatHousingType(application.housingType || result.matched?.drwtUnit || result.matched?.styleNm);
       const title = `${application.complexName} ${housingTypeText} 대기현황 변동`;
-      const body = `${housingTypeText} 대기인원이 ${result.previousWaitCount}명 → ${result.publicWaitCount}명으로 변경됐어요.`;
+      const decrease = result.previousWaitCount - result.publicWaitCount;
+      const body = decrease > 0
+        ? `${housingTypeText} 대기인원이 ${result.previousWaitCount}명 → ${result.publicWaitCount}명으로 줄었어요. 내 순번도 최대 ${decrease}칸 앞당겨졌을 수 있어요.`
+        : `${housingTypeText} 대기인원이 ${result.previousWaitCount}명 → ${result.publicWaitCount}명으로 변경됐어요.`;
       changeNotification = makeNotification(title, body);
       try {
         const permissions = await Notifications.getPermissionsAsync();
@@ -327,6 +335,7 @@ export default function HomeScreen() {
         ...current,
         applications: current.applications.map((item) => item.id === application.id ? {
           ...item,
+          waitAdvance: (item.waitAdvance ?? 0) + (typeof item.publicWaitCount === 'number' && typeof result.publicWaitCount === 'number' ? Math.max(0, item.publicWaitCount - result.publicWaitCount) : 0),
           syncStatus: result.status,
           publicWaitCount: result.publicWaitCount,
           publicWaitBreakdown: result.publicWaitBreakdown,
@@ -518,6 +527,8 @@ export default function HomeScreen() {
           housingType,
           initials: title.replace(/\s/g, '').slice(0, 2).toUpperCase(),
           updatedAt: '방금 전',
+          // 단지나 주택형이 바뀌면 이전 대기인원과 비교할 수 없으므로 추정을 처음부터 다시 한다.
+          ...(item.complexName !== complexName || item.housingType !== housingType ? { waitAdvance: 0, publicWaitCount: undefined } : {}),
         } : item),
       };
       updateData(next);
@@ -566,7 +577,7 @@ export default function HomeScreen() {
       return;
     }
     const moved = selected.rank - nextRank;
-    const updated: HousingApplication = { ...selected, previousRank: selected.rank, rank: nextRank, updatedAt: '방금 전', history: [...selected.history, { rank: nextRank, recordedAt: new Date().toISOString().slice(0, 10) }] };
+    const updated: HousingApplication = { ...selected, previousRank: selected.rank, rank: nextRank, waitAdvance: 0, updatedAt: '방금 전', history: [...selected.history, { rank: nextRank, recordedAt: new Date().toISOString().slice(0, 10) }] };
     const notification = moved > 0 ? makeNotification(`${selected.title} 순번이 상승했어요`, `${selected.rank}번에서 ${nextRank}번으로 ${moved}계단 가까워졌어요.`) : makeNotification(`${selected.title} 순번을 기록했어요`, `현재 순번은 ${nextRank}번입니다.`);
     updateData({ ...data, applications: applications.map((item) => item.id === selected.id ? updated : item), notifications: [notification, ...data.notifications] });
     setDraftRank('');
@@ -608,7 +619,7 @@ export default function HomeScreen() {
               <Text style={styles.heroTitle}>{selected.title}</Text>
               <Text style={styles.heroMeta}>{selected.type}  ·  {selected.area}</Text>
               <Text style={styles.rankLabel}>현재 예비순번</Text>
-              <View style={styles.rankLine}><Text style={styles.heroRank}>{selected.rank}<Text style={styles.rankUnit}>번</Text></Text><View style={styles.changeBox}><Text style={styles.changeText}>↓ {rankChange}계단</Text><Text style={styles.changeLabel}>지난 확인 대비</Text></View></View>
+              <View style={styles.rankLine}><Text style={styles.heroRank}>{selected.rank}<Text style={styles.rankUnit}>번</Text></Text>{estimatedRank !== undefined ? <View style={styles.changeBox}><Text style={styles.changeText}>예상 {estimatedRank}번</Text><Text style={styles.changeLabel}>대기인원 감소 기준 추정</Text></View> : <View style={styles.changeBox}><Text style={styles.changeText}>↓ {rankChange}계단</Text><Text style={styles.changeLabel}>지난 확인 대비</Text></View>}</View>
               <Pressable style={styles.detailButton} onPress={() => { setDraftRank(String(selected.rank)); setIsRankOpen(true); }}><Text style={styles.detailText}>순번 업데이트  →</Text></Pressable>
             </View>
             <HomeIllustration />
@@ -754,7 +765,7 @@ export default function HomeScreen() {
       </Modal>
 
       {selected && <Modal visible={isRankOpen} transparent animationType="slide" onRequestClose={() => setIsRankOpen(false)}>
-        <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsRankOpen(false)} accessibilityLabel="닫기" /><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>UPDATE RANK</Text><Text style={styles.modalTitle}>현재 순번 기록</Text></View><Pressable onPress={() => setIsRankOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>{selected.title}의 공고문이나 대기현황에서 확인한 최신 순번을 입력하세요.</Text><Text style={styles.inputLabel}>현재 예비순번</Text><TextInput value={draftRank} onChangeText={setDraftRank} keyboardType="number-pad" placeholder="예: 24" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Text style={styles.historyTitle}>최근 순번 이력</Text><View style={styles.historyList}>{selected.history.slice(-3).reverse().map((snapshot) => <View key={`${snapshot.recordedAt}-${snapshot.rank}`} style={styles.historyRow}><Text style={styles.historyDate}>{snapshot.recordedAt}</Text><Text style={styles.historyRank}>{snapshot.rank}번</Text></View>)}</View><Pressable style={styles.saveButton} onPress={saveRank}><Text style={styles.saveButtonText}>순번 업데이트 저장  →</Text></Pressable></View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
+        <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsRankOpen(false)} accessibilityLabel="닫기" /><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>UPDATE RANK</Text><Text style={styles.modalTitle}>현재 순번 기록</Text></View><Pressable onPress={() => setIsRankOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>{selected.title}의 공고문이나 대기현황에서 확인한 최신 순번을 입력하세요.</Text><Text style={styles.inputLabel}>현재 예비순번</Text><TextInput value={draftRank} onChangeText={setDraftRank} keyboardType="number-pad" placeholder="예: 24" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Pressable onPress={() => void Linking.openURL(LH_APPLY_URL)} style={styles.lhLink}><Text style={styles.lhLinkText}>LH청약플러스에서 내 순번 확인하기 ↗</Text></Pressable><Text style={styles.historyTitle}>최근 순번 이력</Text><View style={styles.historyList}>{selected.history.slice(-3).reverse().map((snapshot) => <View key={`${snapshot.recordedAt}-${snapshot.rank}`} style={styles.historyRow}><Text style={styles.historyDate}>{snapshot.recordedAt}</Text><Text style={styles.historyRank}>{snapshot.rank}번</Text></View>)}</View><Pressable style={styles.saveButton} onPress={saveRank}><Text style={styles.saveButtonText}>순번 업데이트 저장  →</Text></Pressable></View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
       </Modal>}
 
       <AddTaskSheet visible={isAddTaskOpen} onClose={() => setIsAddTaskOpen(false)} onAdd={(title, detail) => {
@@ -990,6 +1001,8 @@ const styles = StyleSheet.create({
   inputError: { borderColor: '#e39a86', backgroundColor: '#fffaf8' },
   inputErrorText: { color: '#d47d6c', fontSize: 9, marginTop: 5 },
   inputHint: { color: '#9aa9a1', fontSize: 9, marginTop: 6 },
+  lhLink: { alignSelf: 'flex-start', marginTop: 9 },
+  lhLinkText: { color: '#38856d', fontSize: 10, fontWeight: '800' },
   historyTitle: { color: '#61736a', fontSize: 10, fontWeight: '800', marginTop: 19 },
   historyList: { marginTop: 6, backgroundColor: '#f7faf8', borderRadius: 9, paddingHorizontal: 10 },
   historyRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#eaf0ec' },

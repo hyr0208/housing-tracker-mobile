@@ -38,6 +38,8 @@ export type HousingApplication = {
   publicWaitBreakdown?: PublicWaitBreakdown[];
   publicWaitPreviousCount?: number;
   publicWaitUpdatedAt?: string;
+  // 순번을 기록한 뒤 공개 대기인원이 줄어든 누적 수. 예상 순번(rank - waitAdvance)을 계산할 때 쓴다.
+  waitAdvance?: number;
   vacancyBreakdown?: VacancyBreakdown[];
   vacancyUpdatedAt?: string;
   vacancyStatus?: 'synced' | 'no_data' | 'no_match' | 'error';
