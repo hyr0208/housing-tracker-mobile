@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { fetchWaitingRows, findMatchingRows, searchComplexRows } from './myhome-api.mjs';
 import { fetchVacancyStatus } from './lh-vacancy-api.mjs';
 import { createSessionToken, exchangeAuthorizationCode, revokeAppleToken, verifyAppleIdentityToken, verifySessionToken } from './apple-auth.mjs';
+import { verifyReviewAccount } from './review-auth.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const stateDir = path.join(__dirname, 'data');
@@ -263,6 +264,17 @@ const server = http.createServer(async (request, response) => {
         const appleTokens = await readAppleTokens();
         appleTokens[userId] = refreshToken;
         await writeAppleTokens(appleTokens);
+      }
+      sendJson(response, 200, { token: await createSessionToken(stateDir, userId), userId });
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/auth/review') {
+      const { username, password } = await readBody(request);
+      const userId = await verifyReviewAccount(stateDir, username, password);
+      if (!userId) {
+        sendJson(response, 401, { error: '아이디 또는 비밀번호가 맞지 않아요.' });
+        return;
       }
       sendJson(response, 200, { token: await createSessionToken(stateDir, userId), userId });
       return;

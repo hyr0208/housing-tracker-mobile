@@ -64,7 +64,7 @@ export type AppNotification = {
 };
 
 export type UserProfile = {
-  provider: 'kakao' | 'apple';
+  provider: 'kakao' | 'apple' | 'review';
   id: string;
   nickname: string;
   loggedInAt: string;

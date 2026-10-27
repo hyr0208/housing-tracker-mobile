@@ -33,6 +33,7 @@ import { fetchLhVacancyStatus } from '@/services/lh-vacancy';
 import { prepareNotifications } from '@/services/notifications';
 import { loginWithKakao } from '@/services/kakao-auth';
 import { isAppleSignInAvailable, loginWithApple } from '@/services/apple-auth';
+import { loginWithReviewAccount } from '@/services/review-auth';
 import { clearAccountSession, getAccountToken, unlinkAccount } from '@/services/account-auth';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { deleteAccountData, fetchAccountData } from '@/services/account-sync';
@@ -166,6 +167,10 @@ export default function HomeScreen() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isVacancySyncing, setIsVacancySyncing] = useState(false);
   const [isKakaoLoading, setIsKakaoLoading] = useState(false);
+  const [isReviewLoginOpen, setIsReviewLoginOpen] = useState(false);
+  const [isReviewLoading, setIsReviewLoading] = useState(false);
+  const [draftReviewId, setDraftReviewId] = useState('');
+  const [draftReviewPassword, setDraftReviewPassword] = useState('');
   const [isAppleLoading, setIsAppleLoading] = useState(false);
   const [canUseAppleSignIn, setCanUseAppleSignIn] = useState(false);
   const pushTokenRef = useRef<string | undefined>(undefined);
@@ -285,6 +290,20 @@ export default function HomeScreen() {
       showDialog('Apple 로그인 실패', error instanceof Error ? error.message : '로그인 중 오류가 발생했어요.', { tone: 'error' });
     } finally {
       setIsAppleLoading(false);
+    }
+  };
+
+  const handleReviewLogin = async () => {
+    setIsReviewLoading(true);
+    try {
+      const profile = await loginWithReviewAccount(draftReviewId, draftReviewPassword);
+      setDraftReviewPassword('');
+      setIsReviewLoginOpen(false);
+      await completeLogin({ provider: 'review', id: profile.id, nickname: profile.nickname, loggedInAt: new Date().toISOString() });
+    } catch (error) {
+      showDialog('로그인 실패', error instanceof Error ? error.message : '로그인 중 오류가 발생했어요.', { tone: 'error' });
+    } finally {
+      setIsReviewLoading(false);
     }
   };
 
@@ -816,7 +835,7 @@ export default function HomeScreen() {
       </Modal>
 
       <Modal visible={isProfileOpen} transparent animationType="slide" onRequestClose={() => setIsProfileOpen(false)}>
-                <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsProfileOpen(false)} accessibilityLabel="닫기" /><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>MY PROFILE</Text><Text style={styles.modalTitle}>내 정보</Text></View><Pressable onPress={() => setIsProfileOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View>{data.profile ? <><Text style={styles.loggedInLabel}>{data.profile.provider === 'apple' ? 'Apple로 로그인됨' : '카카오로 로그인됨'}</Text><Text style={styles.loggedInName}>{data.profile.nickname}</Text><Text style={styles.modalCopy}>신청 내역과 알림 설정이 내 계정에 저장돼요.</Text><Pressable style={styles.outlineButton} onPress={() => { if (data.profile) void clearAccountSession(data.profile).catch(() => undefined); updateData(defaultAppData); setSelectedId(undefined); setIsProfileOpen(false); }}><Text style={styles.outlineButtonText}>로그아웃</Text></Pressable><Pressable style={styles.deleteAccountButton} onPress={deleteAccount} disabled={isDeletingAccount}><Text style={styles.deleteAccountText}>{isDeletingAccount ? '계정 삭제 중…' : '계정 삭제'}</Text></Pressable></> : <><Text style={styles.modalCopy}>로그인하면 신청 내역과 알림 설정을 계정에 저장하고 다른 기기에서도 불러올 수 있어요.</Text>{canUseAppleSignIn && <AppleAuthentication.AppleAuthenticationButton buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN} buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK} cornerRadius={11} style={[styles.appleButton, isAppleLoading && styles.appleButtonLoading]} onPress={() => { if (!isAppleLoading) void handleAppleLogin(); }} />}<Pressable style={styles.kakaoButton} disabled={!kakaoNativeAppKey || isKakaoLoading} onPress={() => void handleKakaoLogin()}><Text style={styles.kakaoButtonText}>{isKakaoLoading ? '로그인 중…' : '카카오로 로그인'}</Text></Pressable><Text style={styles.loginHint}>아직 키가 없으면 아래에서 이름만 저장해도 돼요.</Text><Text style={styles.inputLabel}>이름</Text><TextInput value={draftProfileName} onChangeText={setDraftProfileName} placeholder="예: 민지" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={() => { const name = draftProfileName.trim(); if (!name) return; updateData({ ...data, profileName: name }); setIsProfileOpen(false); }}><Text style={styles.saveButtonText}>이름만 저장하기</Text></Pressable></>}</View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
+                <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsProfileOpen(false)} accessibilityLabel="닫기" /><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>MY PROFILE</Text><Text style={styles.modalTitle} onLongPress={() => { if (!data.profile) setIsReviewLoginOpen(true); }}>내 정보</Text></View><Pressable onPress={() => setIsProfileOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View>{data.profile ? <><Text style={styles.loggedInLabel}>{data.profile.provider === 'apple' ? 'Apple로 로그인됨' : data.profile.provider === 'review' ? '심사용 계정으로 로그인됨' : '카카오로 로그인됨'}</Text><Text style={styles.loggedInName}>{data.profile.nickname}</Text><Text style={styles.modalCopy}>신청 내역과 알림 설정이 내 계정에 저장돼요.</Text><Pressable style={styles.outlineButton} onPress={() => { if (data.profile) void clearAccountSession(data.profile).catch(() => undefined); updateData(defaultAppData); setSelectedId(undefined); setIsProfileOpen(false); }}><Text style={styles.outlineButtonText}>로그아웃</Text></Pressable><Pressable style={styles.deleteAccountButton} onPress={deleteAccount} disabled={isDeletingAccount}><Text style={styles.deleteAccountText}>{isDeletingAccount ? '계정 삭제 중…' : '계정 삭제'}</Text></Pressable></> : <><Text style={styles.modalCopy}>로그인하면 신청 내역과 알림 설정을 계정에 저장하고 다른 기기에서도 불러올 수 있어요.</Text>{canUseAppleSignIn && <AppleAuthentication.AppleAuthenticationButton buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN} buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK} cornerRadius={11} style={[styles.appleButton, isAppleLoading && styles.appleButtonLoading]} onPress={() => { if (!isAppleLoading) void handleAppleLogin(); }} />}<Pressable style={styles.kakaoButton} disabled={!kakaoNativeAppKey || isKakaoLoading} onPress={() => void handleKakaoLogin()}><Text style={styles.kakaoButtonText}>{isKakaoLoading ? '로그인 중…' : '카카오로 로그인'}</Text></Pressable>{isReviewLoginOpen && <><Text style={styles.inputLabel}>심사용 아이디</Text><TextInput value={draftReviewId} onChangeText={setDraftReviewId} autoCapitalize="none" autoCorrect={false} placeholderTextColor="#a9b4ae" style={styles.input} /><Text style={styles.inputLabel}>비밀번호</Text><TextInput value={draftReviewPassword} onChangeText={setDraftReviewPassword} secureTextEntry autoCapitalize="none" autoCorrect={false} placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} disabled={isReviewLoading} onPress={() => void handleReviewLogin()}><Text style={styles.saveButtonText}>{isReviewLoading ? '로그인 중…' : '로그인'}</Text></Pressable></>}<Text style={styles.loginHint}>아직 키가 없으면 아래에서 이름만 저장해도 돼요.</Text><Text style={styles.inputLabel}>이름</Text><TextInput value={draftProfileName} onChangeText={setDraftProfileName} placeholder="예: 민지" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={() => { const name = draftProfileName.trim(); if (!name) return; updateData({ ...data, profileName: name }); setIsProfileOpen(false); }}><Text style={styles.saveButtonText}>이름만 저장하기</Text></Pressable></>}</View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
       </Modal>
 
       {dialog && !isAddOpen && !isRankOpen && !isNotificationOpen && !isProfileOpen && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}
