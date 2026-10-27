@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AppState,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -47,6 +48,17 @@ Notifications.setNotificationHandler({
 });
 
 const LH_APPLY_URL = 'https://apply.lh.or.kr';
+
+function toPushNotification(push: Notifications.Notification): AppNotification {
+  const receivedAt = new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(push.date));
+  return {
+    id: `push-${push.request.identifier}`,
+    title: push.request.content.title ?? '',
+    body: push.request.content.body ?? '',
+    createdAt: receivedAt,
+    read: false,
+  };
+}
 
 const COLORS = {
   ink: '#243b34',
@@ -200,6 +212,32 @@ export default function HomeScreen() {
 
   useEffect(() => subscribeToAppData(setData), []);
 
+  // 서버가 보낸 푸시(대기·공가 변동)는 앱 밖에서 도착하므로, 받거나 알림 트레이에 남아 있는 것을 알림 센터에 옮겨 담는다.
+  useEffect(() => {
+    if (!isReady) return;
+    const recordPushes = (pushes: Notifications.Notification[]) => {
+      setData((current) => {
+        const known = new Set(current.notifications.map((item) => item.id));
+        const added = pushes
+          .filter((push) => !push.request.content.data?.inApp && push.request.content.title)
+          .map((push) => toPushNotification(push))
+          .filter((item) => !known.has(item.id));
+        if (added.length === 0) return current;
+        const next = { ...current, notifications: [...added, ...current.notifications] };
+        void saveAppData(next);
+        return next;
+      });
+    };
+    const collectPresented = () => { Notifications.getPresentedNotificationsAsync().then(recordPushes).catch(() => undefined); };
+    const lastResponse = Notifications.getLastNotificationResponse();
+    if (lastResponse) recordPushes([lastResponse.notification]);
+    collectPresented();
+    const received = Notifications.addNotificationReceivedListener((push) => recordPushes([push]));
+    const responded = Notifications.addNotificationResponseReceivedListener((response) => recordPushes([response.notification]));
+    const appState = AppState.addEventListener('change', (state) => { if (state === 'active') collectPresented(); });
+    return () => { received.remove(); responded.remove(); appState.remove(); };
+  }, [isReady]);
+
   useEffect(() => {
     isAppleSignInAvailable().then(setCanUseAppleSignIn).catch(() => setCanUseAppleSignIn(false));
   }, []);
@@ -325,7 +363,7 @@ export default function HomeScreen() {
       try {
         const permissions = await Notifications.getPermissionsAsync();
         if (permissions.status !== 'granted') await Notifications.requestPermissionsAsync();
-        await Notifications.scheduleNotificationAsync({ content: { title, body, sound: 'default' }, trigger: null });
+        await Notifications.scheduleNotificationAsync({ content: { title, body, sound: 'default', data: { inApp: true } }, trigger: null });
       } catch {
         // 알림 권한이 없어도 앱 안의 알림 센터에는 기록합니다.
       }
