@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fetchWaitingRows, findMatchingRows, searchComplexRows } from './myhome-api.mjs';
+import { fetchAllWaitingRows, fetchWaitingRows, findMatchingRows, searchComplexRows } from './myhome-api.mjs';
 import { fetchVacancyStatus } from './lh-vacancy-api.mjs';
 import { createSessionToken, exchangeAuthorizationCode, revokeAppleToken, verifyAppleIdentityToken, verifySessionToken } from './apple-auth.mjs';
 import { verifyReviewAccount } from './review-auth.mjs';
@@ -400,6 +400,38 @@ const server = http.createServer(async (request, response) => {
       };
       const rows = await fetchWaitingRows(application);
       sendJson(response, 200, { rows: findMatchingRows(rows, application), totalCount: rows.length });
+      return;
+    }
+
+    // 지역의 모든 단지를 대기인원이 적은 순으로 묶어 보여준다(로그인 없이 쓰는 대기현황 탐색).
+    if (request.method === 'GET' && url.pathname === '/api/waiting-explore') {
+      const brtcCode = url.searchParams.get('brtcCode') || '';
+      if (!brtcCode) {
+        sendJson(response, 400, { error: '지역을 골라 주세요.' });
+        return;
+      }
+      const rows = await fetchAllWaitingRows(brtcCode);
+      const complexes = new Map();
+      for (const row of rows) {
+        const id = String(row.hsmpSn ?? `${row.hsmpNm}|${row.suplyTyNm}`);
+        const complex = complexes.get(id) ?? {
+          id,
+          complexName: row.hsmpNm,
+          region: row.brtcNm,
+          district: row.signguNm,
+          address: row.rnAdres,
+          supplyType: row.suplyTyNm,
+          institution: row.rtsInsttNm,
+          totalWait: 0,
+          types: [],
+        };
+        const count = Number(row.waitCo ?? 0);
+        complex.totalWait += count;
+        complex.types.push({ label: row.drwtUnit || row.styleNm || '주택형 미상', count });
+        complexes.set(id, complex);
+      }
+      const list = [...complexes.values()].sort((a, b) => a.totalWait - b.totalWait || a.complexName.localeCompare(b.complexName, 'ko'));
+      sendJson(response, 200, { complexes: list });
       return;
     }
 

@@ -110,6 +110,42 @@ export async function fetchWaitingRows({ brtcCode, signguCode, suplyTy, houseTy,
   return rows;
 }
 
+const allRowsCache = new Map();
+// 대기인원은 하루에 몇 번 바뀌지 않으므로 지역 전체 목록은 길게 캐시한다.
+const allRowsCacheTtlMs = 6 * 60 * 60 * 1000;
+
+async function fetchWaitingPage(brtcCode, pageNo, numOfRows) {
+  const url = new URL(API_BASE_URL);
+  url.searchParams.set('serviceKey', getServiceKey());
+  url.searchParams.set('brtcCode', brtcCode);
+  url.searchParams.set('numOfRows', String(numOfRows));
+  url.searchParams.set('pageNo', String(pageNo));
+  const response = await fetchWithRetry(url);
+  if (!response.ok) throw new Error('마이홈 공개 현황 서버가 잠시 응답하지 않았어요. 잠시 후 다시 확인해주세요.');
+  const payload = await response.json();
+  const header = payload?.response?.header;
+  if (header?.resultCode !== '00') throw new Error(`마이홈 API 오류: ${header?.resultMsg || header?.resultCode || '알 수 없는 오류'}`);
+  const body = payload?.response?.body ?? {};
+  return { items: asList(body.item), totalCount: Number(body.totalCount || 0) };
+}
+
+// 한 지역의 대기현황 전체. 요청 한 번이 크기와 상관없이 몇 초씩 걸려서, 첫 페이지로 전체 건수를 알아낸 뒤 나머지를 동시에 받는다.
+export async function fetchAllWaitingRows(brtcCode) {
+  const cached = allRowsCache.get(brtcCode);
+  if (cached && cached.expiresAt > Date.now()) return cached.rows;
+  const numOfRows = 500;
+  const first = await fetchWaitingPage(brtcCode, 1, numOfRows);
+  const pageCount = Math.min(20, Math.ceil(first.totalCount / numOfRows));
+  const rest = [];
+  for (let start = 2; start <= pageCount; start += 4) {
+    const batch = Array.from({ length: Math.min(4, pageCount - start + 1) }, (_, index) => fetchWaitingPage(brtcCode, start + index, numOfRows));
+    rest.push(...await Promise.all(batch));
+  }
+  const rows = [first, ...rest].flatMap((page) => page.items);
+  allRowsCache.set(brtcCode, { rows, expiresAt: Date.now() + allRowsCacheTtlMs });
+  return rows;
+}
+
 export function normalizeName(value = '') {
   return String(value).toLowerCase().replace(/[\s·_\-/()[\]]/g, '');
 }

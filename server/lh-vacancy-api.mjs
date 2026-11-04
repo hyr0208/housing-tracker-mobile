@@ -111,6 +111,69 @@ function parseVacancyRows(html) {
   return results;
 }
 
+function sectionHtml(html, id) {
+  const start = html.search(new RegExp(`id=["']${id}["']`));
+  if (start < 0) return '';
+  const next = html.slice(start + 1).search(/id=["']rthoDiv\d+["']/);
+  return next < 0 ? html.slice(start) : html.slice(start, start + 1 + next);
+}
+
+function tableRows(section) {
+  const body = section.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i)?.[1] || '';
+  return [...body.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)].map((row) => row[1]);
+}
+
+// 모바일용 제목(<em class="mTit">)을 빼고 셀 값만 읽는다.
+function cellTexts(rowHtml) {
+  return [...rowHtml.matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi)]
+    .map((cell) => textOnly(cell[1].replace(/<em class="mTit">[\s\S]*?<\/em>/gi, '')));
+}
+
+// LH 부동산맵 단지 팝업의 '단지정보', '주택형 안내', '공고현황' 탭을 읽는다. 임대료는 팝업에 없고 공고문에만 있다.
+function parseComplexInfo(html) {
+  const info = {};
+  for (const row of tableRows(sectionHtml(html, 'rthoDiv01'))) {
+    const cells = [...row.matchAll(/<th[^>]*>([\s\S]*?)<\/th>\s*<td[^>]*>([\s\S]*?)<\/td>/gi)];
+    for (const [, label, value] of cells) info[textOnly(label).replace(/\(.*\)/, '').trim()] = textOnly(value);
+  }
+  const types = tableRows(sectionHtml(html, 'rthoDiv02'))
+    .map(cellTexts)
+    .filter((cells) => cells.length >= 4)
+    .map(([type, area, households, latestNotice, latestSupply]) => ({
+      type,
+      area: Number(area) || undefined,
+      households: Number(households.replace(/,/g, '')) || undefined,
+      latestNotice: latestNotice || undefined,
+      latestSupply: Number(String(latestSupply || '').replace(/,/g, '')) || undefined,
+    }));
+  const notices = tableRows(sectionHtml(html, 'rthoDiv03'))
+    .map((row) => {
+      const cells = cellTexts(row);
+      const panId = row.match(/goWrtancDtl\('([^']+)','([^']*)','([^']*)','([^']*)'\)/);
+      if (cells.length < 8) return null;
+      return {
+        title: cells[2],
+        announcedAt: cells[5].replace(/\./g, '-'),
+        closedAt: cells[6].replace(/\./g, '-'),
+        status: cells[7],
+        url: panId ? `https://apply.lh.or.kr/lhapply/apply/wt/wrtanc/selectWrtancInfo.do?panId=${panId[1]}&ccrCnntSysDsCd=${panId[2]}&uppAisTpCd=${panId[3]}&aisTpCd=${panId[4]}&mi=1026` : undefined,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 5);
+  const phone = info['문의처']?.match(/\d{2,4}-\d{3,4}-\d{4}/)?.[0];
+  if (!info['단지명'] && types.length === 0) return undefined;
+  return {
+    households: Number(String(info['세대수'] || '').replace(/,/g, '')) || undefined,
+    moveInMonth: info['입주예정월'] || undefined,
+    heating: info['난방방식'] || undefined,
+    phone,
+    address: info['소재지'] || undefined,
+    types,
+    notices,
+  };
+}
+
 function getAreaSearchKeyword(area = '') {
   const cityOrDistrict = String(area).match(/[가-힣]+(?:특별자치시|특별시|광역시|시|군|구)/)?.[0];
   return cityOrDistrict?.replace(/(?:특별자치시|특별시|광역시|자치시|시|군|구)$/, '');
@@ -154,6 +217,7 @@ export async function fetchVacancyStatus({ complexName, title, area, brtcCode })
     status: rows.length ? 'synced' : 'no_data',
     complexName: lhComplex.sbdLgoNm || targetName,
     rows,
+    complexInfo: parseComplexInfo(html),
     checkedAt: new Date().toISOString(),
     message: rows.length ? undefined : 'LH 부동산맵에 조회된 공가 현황이 없어요.',
     note: 'LH 공가 호수는 매월 말 기준으로 업데이트되며, 실제 공급 가능 호수와 다를 수 있어요.',

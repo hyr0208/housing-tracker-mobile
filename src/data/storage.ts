@@ -22,6 +22,17 @@ export type VacancyBreakdown = {
   count: number;
 };
 
+export type ComplexInfo = {
+  lhName?: string;
+  households?: number;
+  moveInMonth?: string;
+  heating?: string;
+  phone?: string;
+  address?: string;
+  types: { type: string; area?: number; households?: number; latestNotice?: string; latestSupply?: number }[];
+  notices: { title: string; announcedAt: string; closedAt: string; status: string; url?: string }[];
+};
+
 export type HousingApplication = {
   id: string;
   title: string;
@@ -51,6 +62,7 @@ export type HousingApplication = {
   vacancyUpdatedAt?: string;
   vacancyStatus?: 'synced' | 'no_data' | 'no_match' | 'error';
   vacancyMessage?: string;
+  complexInfo?: ComplexInfo;
   syncStatus?: 'synced' | 'no_match' | 'error';
   syncMessage?: string;
 };

@@ -1,9 +1,10 @@
-import type { VacancyBreakdown } from '@/data/storage';
+import type { ComplexInfo, VacancyBreakdown } from '@/data/storage';
 
 export type VacancyStatusResult = {
   status: 'synced' | 'no_data' | 'no_match';
   complexName: string;
   rows: VacancyBreakdown[];
+  complexInfo?: Omit<ComplexInfo, 'lhName'>;
   checkedAt?: string;
   note?: string;
   message?: string;

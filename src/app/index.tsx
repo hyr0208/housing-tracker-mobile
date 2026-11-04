@@ -30,6 +30,7 @@ import { AddTaskSheet } from '@/components/add-task-sheet';
 import { AddEventSheet } from '@/components/add-event-sheet';
 import { formatDday, formatEventDate, kindLabel, syncScheduleReminders, upcomingEvents } from '@/services/schedule';
 import { TrendChart } from '@/components/trend-chart';
+import { ComplexInfoPanel } from '@/components/complex-info';
 import { syncPublicWait } from '@/services/public-sync';
 import { estimateWait, formatWaitEstimate, shortWaitEstimate } from '@/services/wait-estimate';
 import { searchComplexes, type ComplexSearchResult } from '@/services/complex-search';
@@ -86,7 +87,7 @@ type DialogState = {
   onConfirm?: () => void;
 };
 
-type StatusSheet = 'waiting' | 'vacancy' | null;
+type StatusSheet = 'waiting' | 'vacancy' | 'complex' | null;
 
 function Chevron({ direction = 'right' }: { direction?: 'right' | 'down' }) {
   return <Text style={direction === 'down' ? styles.chevronDown : styles.chevron}>›</Text>;
@@ -437,6 +438,8 @@ export default function HomeScreen() {
             vacancyUpdatedAt: result.checkedAt || new Date().toISOString(),
             vacancyStatus: result.status,
             vacancyMessage: result.message,
+            // 단지 정보는 같은 LH 팝업에서 읽어오므로 공가현황과 함께 갱신한다. 못 읽었으면 이전 정보를 둔다.
+            complexInfo: result.complexInfo ? { ...result.complexInfo, lhName: result.complexName } : item.complexInfo,
           } : item),
         };
         void saveAppData(next);
@@ -722,6 +725,10 @@ export default function HomeScreen() {
                 <Text style={styles.statusShortcutSummary}>{isVacancySyncing ? '현황 확인 중…' : selected.vacancyBreakdown?.length ? `공가 ${vacancyTotalCount}호` : '눌러서 자세히 보기'}</Text>
               </Pressable>
             </View>
+            <Pressable style={[styles.statusShortcut, styles.statusShortcutWide]} onPress={() => { setStatusSheet('complex'); if (!selected.complexInfo && !isVacancySyncing) void runVacancySync(selected); }}>
+              <View style={styles.statusShortcutTop}><Text style={styles.statusShortcutTitle}>단지 정보</Text><Text style={styles.statusShortcutArrow}>›</Text></View>
+              <Text style={styles.statusShortcutSummary}>{selected.complexInfo ? [selected.complexInfo.households ? `${selected.complexInfo.households.toLocaleString()}세대` : null, selected.complexInfo.moveInMonth ? `${selected.complexInfo.moveInMonth} 입주` : null, '주소·주택형·지난 공고'].filter(Boolean).join(' · ') : '주소, 주택형, 지난 모집공고 보기'}</Text>
+            </Pressable>
           </View>
 
           <View style={styles.progressCard}>
@@ -757,8 +764,8 @@ export default function HomeScreen() {
             <View style={styles.sheetHandle} />
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.cardEyebrow}>{statusSheet === 'waiting' ? 'PUBLIC WAITING STATUS' : 'LH VACANCY STATUS'}</Text>
-                <Text style={styles.modalTitle}>{statusSheet === 'waiting' ? '공개 대기현황' : '주택형별 공가현황'}</Text>
+                <Text style={styles.cardEyebrow}>{statusSheet === 'waiting' ? 'PUBLIC WAITING STATUS' : statusSheet === 'vacancy' ? 'LH VACANCY STATUS' : 'COMPLEX INFO'}</Text>
+                <Text style={styles.modalTitle}>{statusSheet === 'waiting' ? '공개 대기현황' : statusSheet === 'vacancy' ? '주택형별 공가현황' : '단지 정보'}</Text>
               </View>
               <Pressable onPress={() => setStatusSheet(null)} accessibilityLabel="닫기"><Text style={styles.closeText}>×</Text></Pressable>
             </View>
@@ -784,7 +791,7 @@ export default function HomeScreen() {
                 {selected.syncStatus === 'synced' && <TrendChart title="대기인원 변화" unit="명" points={(selected.publicWaitHistory ?? []).map((snapshot) => ({ value: snapshot.count, recordedAt: snapshot.recordedAt }))} emptyText="대기인원이 바뀌면 날짜별로 기록해 그래프로 보여드려요." />}
                 {selected.syncStatus === 'synced' && <Text style={styles.sheetFootnote}>서버가 주기적으로 확인하는 공개 대기인원이에요.</Text>}
                 {selected.publicWaitUpdatedAt && <Text style={styles.sheetUpdated}>마지막 확인 {new Date(selected.publicWaitUpdatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text>}
-              </> : <>
+              </> : statusSheet === 'vacancy' ? <>
                 <Text style={styles.sheetDescription}>{isVacancySyncing ? 'LH 부동산맵에서 공가 호수를 확인하고 있어요…' : selected.vacancyMessage || 'LH 부동산맵에 표시되는 월말 기준 공가 현황이에요.'}</Text>
                 <Pressable style={styles.sheetRefreshButton} onPress={() => void runVacancySync(selected)} disabled={isVacancySyncing}><Text style={styles.sheetRefreshText}>{isVacancySyncing ? '확인 중…' : '공가현황 지금 확인'}</Text></Pressable>
                 {selected.vacancyBreakdown?.length ? <View style={styles.sheetDataPanel}>
@@ -795,7 +802,7 @@ export default function HomeScreen() {
                 </View> : <Text style={styles.sheetEmpty}>{selected.vacancyMessage || '아직 조회된 공가 현황이 없어요. 다시 확인해 주세요.'}</Text>}
                 <Text style={styles.sheetFootnote}>공가 수는 매월 말 기준이에요. 진행 중인 모집과 하자보수 물량 등이 반영되지 않아 실제 공급 가능 호수와 다를 수 있어요.</Text>
                 {selected.vacancyUpdatedAt && <Text style={styles.sheetUpdated}>마지막 확인 {new Date(selected.vacancyUpdatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text>}
-              </>}
+              </> : <ComplexInfoPanel info={selected.complexInfo} isLoading={isVacancySyncing} onLoad={() => void runVacancySync(selected)} />}
             </ScrollView>
           </View>
           {dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}
@@ -932,6 +939,7 @@ const styles = StyleSheet.create({
   detailButton: { marginTop: 15 },
   detailText: { color: '#38856d', fontSize: 10, fontWeight: '800' },
   statusShortcuts: { marginHorizontal: 16, marginTop: 12 },
+  statusShortcutWide: { flex: 0, marginTop: 9 },
   statusShortcutRow: { flexDirection: 'row', gap: 9, marginTop: 10 },
   statusShortcut: { flex: 1, minHeight: 70, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e4ece7', paddingHorizontal: 12, paddingVertical: 10, justifyContent: 'center' },
   statusShortcutTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
