@@ -194,7 +194,7 @@ export default function HomeScreen() {
   const rankChange = selected ? selected.previousRank - selected.rank : 0;
   // 개인 예비순번은 공개 API로 알 수 없어서, 대기인원이 줄어든 만큼 앞당겨졌다고 추정한다.
   const estimatedRank = selected?.waitAdvance ? Math.max(1, selected.rank - selected.waitAdvance) : undefined;
-  const waitEstimate = selected ? estimateWait(selected.publicWaitHistory, estimatedRank ?? selected.rank) : undefined;
+  const waitEstimate = selected ? estimateWait(selected.publicWaitHistory, estimatedRank ?? selected.rank, selected.history) : undefined;
   const waitEstimateShort = waitEstimate ? shortWaitEstimate(waitEstimate) : undefined;
   const publicMaxWait = Math.max(1, ...(selected?.publicWaitBreakdown?.map((item) => item.count) ?? []));
   const upcoming = upcomingEvents(data.events);
@@ -806,7 +806,7 @@ export default function HomeScreen() {
                 {selected.syncStatus === 'synced' && waitEstimate && <View style={styles.estimatePanel}>
                   <Text style={styles.breakdownPanelTitle}>내 차례까지 예상</Text>
                   <Text style={styles.estimateText}>{formatWaitEstimate(waitEstimate)}</Text>
-                  {waitEstimate.status === 'estimated' && <Text style={styles.estimateBasis}>최근 {waitEstimate.days}일 동안 대기인원이 {waitEstimate.decrease}명 줄어든 속도와 {estimatedRank !== undefined ? '예상' : '현재'} 순번 {estimatedRank ?? selected.rank}번 기준이에요. 공가 발생에 따라 크게 달라질 수 있어요.</Text>}
+                  {waitEstimate.status === 'estimated' && <Text style={styles.estimateBasis}>{waitEstimate.source === 'rank' ? `순번 기록 ${waitEstimate.days}일 동안 ${waitEstimate.decrease}칸 앞당겨진 속도와` : `최근 ${waitEstimate.days}일 동안 대기인원이 ${waitEstimate.decrease}명 줄어든 속도와`} {estimatedRank !== undefined ? '예상' : '현재'} 순번 {estimatedRank ?? selected.rank}번 기준이에요. 공가 발생에 따라 크게 달라질 수 있어요.</Text>}
                 </View>}
                 <TrendChart title="내 순번 변화" unit="번" points={selected.history.map((snapshot) => ({ value: snapshot.rank, recordedAt: snapshot.recordedAt }))} emptyText="순번을 두 번 이상 기록하면 변화를 그래프로 보여드려요." />
                 <Pressable style={styles.chartLink} onPress={() => { setStatusSheet(null); setIsHistoryOpen(true); }}><Text style={styles.chartLinkText}>순번 직접 입력하기 ›</Text></Pressable>

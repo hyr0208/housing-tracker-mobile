@@ -1,19 +1,36 @@
-import type { WaitCountSnapshot } from '@/data/storage';
+import type { RankSnapshot, WaitCountSnapshot } from '@/data/storage';
 
 export type WaitEstimate =
   | { status: 'collecting' }
   | { status: 'stalled'; days: number }
-  | { status: 'estimated'; months: number; days: number; decrease: number };
+  | { status: 'estimated'; months: number; days: number; decrease: number; source: 'rank' | 'wait' };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // 대기인원은 한 달에 몇 번 바뀌지 않아서, 너무 짧은 기간으로 계산하면 속도가 크게 튄다.
 const MIN_SPAN_DAYS = 14;
 
 /**
- * 서버가 기록한 공개 대기인원 변화로 "지금 속도면 내 차례까지 몇 달"인지 추정합니다.
- * 대기인원이 줄어든 만큼만 앞으로 나아갔다고 보고(새 대기자는 내 뒤에 붙으므로 늘어난 건 무시), 그 평균 속도로 계산해요.
+ * 내가 기록한 예비순번 변화로 앞당겨진 속도를 구합니다. 직접 입력한 지난 순번까지 쓰기 때문에 앱을 쓰기 전 흐름도 반영돼요.
  */
-export function estimateWait(history: WaitCountSnapshot[] | undefined, rank: number, now = Date.now()): WaitEstimate {
+function estimateFromRanks(ranks: RankSnapshot[] | undefined, rank: number): WaitEstimate | undefined {
+  if (!ranks || ranks.length < 2) return undefined;
+  const sorted = [...ranks].sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const days = Math.floor((new Date(last.recordedAt).getTime() - new Date(first.recordedAt).getTime()) / DAY_MS);
+  const decrease = first.rank - last.rank;
+  if (days < MIN_SPAN_DAYS || decrease <= 0) return undefined;
+  return { status: 'estimated', months: (rank / (decrease / days)) / 30, days, decrease, source: 'rank' };
+}
+
+/**
+ * "지금 속도면 내 차례까지 몇 달"인지 추정합니다.
+ * 내 순번 기록이 2주 이상이고 앞당겨졌다면 그 속도를 쓰고, 아니면 서버가 기록한 공개 대기인원 변화를 씁니다.
+ * 대기인원은 줄어든 만큼만 앞으로 나아갔다고 보고(새 대기자는 내 뒤에 붙으므로 늘어난 건 무시), 그 평균 속도로 계산해요.
+ */
+export function estimateWait(history: WaitCountSnapshot[] | undefined, rank: number, ranks?: RankSnapshot[], now = Date.now()): WaitEstimate {
+  const fromRanks = estimateFromRanks(ranks, rank);
+  if (fromRanks) return fromRanks;
   if (!history || history.length === 0) return { status: 'collecting' };
   const days = Math.floor((now - new Date(history[0].recordedAt).getTime()) / DAY_MS);
   if (days < MIN_SPAN_DAYS) return { status: 'collecting' };
@@ -25,11 +42,11 @@ export function estimateWait(history: WaitCountSnapshot[] | undefined, rank: num
   if (decrease === 0) return { status: 'stalled', days };
 
   const months = (rank / (decrease / days)) / 30;
-  return { status: 'estimated', months, days, decrease };
+  return { status: 'estimated', months, days, decrease, source: 'wait' };
 }
 
 export function formatWaitEstimate(estimate: WaitEstimate) {
-  if (estimate.status === 'collecting') return '대기인원 변화가 2주 이상 쌓이면 예상 시기를 알려드려요.';
+  if (estimate.status === 'collecting') return '순번 기록이나 대기인원 변화가 2주 이상 쌓이면 예상 시기를 알려드려요.';
   if (estimate.status === 'stalled') return `최근 ${estimate.days}일 동안 대기인원이 줄지 않아 아직 예상하기 어려워요.`;
   const { months } = estimate;
   if (months < 1) return '지금 속도면 1개월 안에 차례가 올 수 있어요.';
