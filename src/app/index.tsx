@@ -28,6 +28,7 @@ import {
 } from '@/data/storage';
 import { AddTaskSheet } from '@/components/add-task-sheet';
 import { syncPublicWait } from '@/services/public-sync';
+import { estimateWait, formatWaitEstimate, shortWaitEstimate } from '@/services/wait-estimate';
 import { searchComplexes, type ComplexSearchResult } from '@/services/complex-search';
 import { fetchLhVacancyStatus } from '@/services/lh-vacancy';
 import { prepareNotifications } from '@/services/notifications';
@@ -185,6 +186,8 @@ export default function HomeScreen() {
   const rankChange = selected ? selected.previousRank - selected.rank : 0;
   // 개인 예비순번은 공개 API로 알 수 없어서, 대기인원이 줄어든 만큼 앞당겨졌다고 추정한다.
   const estimatedRank = selected?.waitAdvance ? Math.max(1, selected.rank - selected.waitAdvance) : undefined;
+  const waitEstimate = selected ? estimateWait(selected.publicWaitHistory, estimatedRank ?? selected.rank) : undefined;
+  const waitEstimateShort = waitEstimate ? shortWaitEstimate(waitEstimate) : undefined;
   const publicMaxWait = Math.max(1, ...(selected?.publicWaitBreakdown?.map((item) => item.count) ?? []));
   const vacancyTotalCount = selected?.vacancyBreakdown?.reduce((total, item) => total + item.count, 0) ?? 0;
 
@@ -396,6 +399,7 @@ export default function HomeScreen() {
           syncStatus: result.status,
           publicWaitCount: result.publicWaitCount,
           publicWaitBreakdown: result.publicWaitBreakdown,
+          publicWaitHistory: result.publicWaitHistory ?? item.publicWaitHistory,
           publicWaitPreviousCount: result.previousWaitCount,
           publicWaitUpdatedAt: result.checkedAt,
           syncMessage: result.message,
@@ -585,7 +589,7 @@ export default function HomeScreen() {
           initials: title.replace(/\s/g, '').slice(0, 2).toUpperCase(),
           updatedAt: '방금 전',
           // 단지나 주택형이 바뀌면 이전 대기인원과 비교할 수 없으므로 추정을 처음부터 다시 한다.
-          ...(item.complexName !== complexName || item.housingType !== housingType ? { waitAdvance: 0, publicWaitCount: undefined } : {}),
+          ...(item.complexName !== complexName || item.housingType !== housingType ? { waitAdvance: 0, publicWaitCount: undefined, publicWaitHistory: undefined } : {}),
         } : item),
       };
       updateData(next);
@@ -687,7 +691,7 @@ export default function HomeScreen() {
             <View style={styles.statusShortcutRow}>
               <Pressable style={styles.statusShortcut} onPress={() => setStatusSheet('waiting')}>
                 <View style={styles.statusShortcutTop}><Text style={styles.statusShortcutTitle}>공개 대기현황</Text><Text style={styles.statusShortcutArrow}>›</Text></View>
-                <Text style={styles.statusShortcutSummary}>{isSyncing ? '현황 확인 중…' : selected.publicWaitCount !== undefined ? `현재 대기 ${selected.publicWaitCount}명` : selected.publicWaitBreakdown?.length ? `${selected.publicWaitBreakdown.length}개 주택형 확인` : '눌러서 자세히 보기'}</Text>
+                <Text style={styles.statusShortcutSummary}>{isSyncing ? '현황 확인 중…' : selected.publicWaitCount !== undefined ? `현재 대기 ${selected.publicWaitCount}명${waitEstimateShort ? ` · ${waitEstimateShort}` : ''}` : selected.publicWaitBreakdown?.length ? `${selected.publicWaitBreakdown.length}개 주택형 확인` : '눌러서 자세히 보기'}</Text>
               </Pressable>
               <Pressable style={styles.statusShortcut} onPress={() => setStatusSheet('vacancy')}>
                 <View style={styles.statusShortcutTop}><Text style={styles.statusShortcutTitle}>공가현황</Text><Text style={styles.statusShortcutArrow}>›</Text></View>
@@ -703,7 +707,7 @@ export default function HomeScreen() {
 
           <View style={styles.sectionHeader}><View><Text style={styles.cardEyebrow}>MY APPLICATIONS</Text><Text style={styles.sectionTitle}>내 신청 현황 <Text style={styles.countPill}>{applications.length}</Text></Text></View><Pressable onPress={openAddApplication} style={styles.addSmall}><Text style={styles.addSmallText}>＋ 추가</Text></Pressable></View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.applicationList}>
-            {applications.map((item) => <Pressable key={item.id} onPress={() => setSelectedId(item.id)} style={[styles.applicationCard, selectedId === item.id && styles.applicationSelected]}><View style={styles.applicationCardHeader}><View style={[styles.appIcon, { backgroundColor: item.color }]}><Text style={styles.appInitials}>{item.initials}</Text></View><Pressable style={styles.editApplicationButton} onPress={() => openEditApplication(item)}><Text style={styles.editApplicationText}>수정</Text></Pressable></View><Text style={styles.appTitle} numberOfLines={1}>{item.title}</Text><Text style={styles.appMeta}>{item.type}</Text><View style={styles.appRankLine}><Text style={styles.appRank}>{item.rank}<Text style={styles.appRankUnit}>번</Text></Text>{item.rank !== item.previousRank ? <Text style={styles.upTag}>↓ {item.previousRank - item.rank}</Text> : <Text style={styles.sameTag}>변동 없음</Text>}</View><Text style={styles.appUpdated}>{item.updatedAt}</Text></Pressable>)}
+            {applications.map((item) => <Pressable key={item.id} onPress={() => setSelectedId(item.id)} onLongPress={() => deleteApplication(item.id)} accessibilityHint="길게 누르면 삭제할 수 있어요" style={[styles.applicationCard, selectedId === item.id && styles.applicationSelected]}><View style={styles.applicationCardHeader}><View style={[styles.appIcon, { backgroundColor: item.color }]}><Text style={styles.appInitials}>{item.initials}</Text></View><Pressable style={styles.editApplicationButton} onPress={() => openEditApplication(item)}><Text style={styles.editApplicationText}>수정</Text></Pressable></View><Text style={styles.appTitle} numberOfLines={1}>{item.title}</Text><Text style={styles.appMeta}>{item.type}</Text><View style={styles.appRankLine}><Text style={styles.appRank}>{item.rank}<Text style={styles.appRankUnit}>번</Text></Text>{item.rank !== item.previousRank ? <Text style={styles.upTag}>↓ {item.previousRank - item.rank}</Text> : <Text style={styles.sameTag}>변동 없음</Text>}</View><Text style={styles.appUpdated}>{item.updatedAt}</Text></Pressable>)}
           </ScrollView>
 
           <View style={styles.lowerHeader}><View><Text style={styles.cardEyebrow}>NEXT STEPS</Text><Text style={styles.sectionTitle}>준비할 일 <Text style={styles.taskCount}>{completed}/{tasks.length}</Text></Text></View><Pressable onPress={() => setIsAddTaskOpen(true)}><Text style={styles.moreText}>할 일 추가  ＋</Text></Pressable></View>
@@ -744,6 +748,11 @@ export default function HomeScreen() {
                     <Text style={styles.typeCount}>{item.count}명</Text>
                   </View>)}
                 </View> : <Text style={styles.sheetEmpty}>{selected.syncMessage || '아직 공개 대기현황이 없어요. 다시 확인해 주세요.'}</Text>}
+                {selected.syncStatus === 'synced' && waitEstimate && <View style={styles.estimatePanel}>
+                  <Text style={styles.breakdownPanelTitle}>내 차례까지 예상</Text>
+                  <Text style={styles.estimateText}>{formatWaitEstimate(waitEstimate)}</Text>
+                  {waitEstimate.status === 'estimated' && <Text style={styles.estimateBasis}>최근 {waitEstimate.days}일 동안 대기인원이 {waitEstimate.decrease}명 줄어든 속도와 {estimatedRank !== undefined ? '예상' : '현재'} 순번 {estimatedRank ?? selected.rank}번 기준이에요. 공가 발생에 따라 크게 달라질 수 있어요.</Text>}
+                </View>}
                 {selected.syncStatus === 'synced' && <Text style={styles.sheetFootnote}>서버가 주기적으로 확인하는 공개 대기인원이에요.</Text>}
                 {selected.publicWaitUpdatedAt && <Text style={styles.sheetUpdated}>마지막 확인 {new Date(selected.publicWaitUpdatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text>}
               </> : <>
@@ -1058,6 +1067,9 @@ const styles = StyleSheet.create({
   inputError: { borderColor: '#e39a86', backgroundColor: '#fffaf8' },
   inputErrorText: { color: '#d47d6c', fontSize: 9, marginTop: 5 },
   inputHint: { color: '#9aa9a1', fontSize: 9, marginTop: 6 },
+  estimatePanel: { marginTop: 12, borderRadius: 12, backgroundColor: '#eef7f2', paddingHorizontal: 14, paddingVertical: 12 },
+  estimateText: { color: '#285645', fontSize: 13, fontWeight: '800', marginTop: 6 },
+  estimateBasis: { color: '#72a391', fontSize: 9, marginTop: 6, lineHeight: 14 },
   lhLink: { alignSelf: 'flex-start', marginTop: 9 },
   lhLinkText: { color: '#38856d', fontSize: 10, fontWeight: '800' },
   historyTitle: { color: '#61736a', fontSize: 10, fontWeight: '800', marginTop: 19 },

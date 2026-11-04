@@ -140,6 +140,14 @@ async function syncApplication(application) {
   }, []);
   const previousWaitCount = current.publicWaitCount;
   const changed = typeof previousWaitCount === 'number' && previousWaitCount !== nextWaitCount;
+  const checkedAt = new Date().toISOString();
+  // 대기인원이 바뀔 때만 기록해 앱이 입주까지 예상 기간을 계산하게 한다. 단지·주택형이 바뀌면 처음부터 다시 쌓는다.
+  const sameTarget = current.complexName === incoming.complexName && current.housingType === incoming.housingType;
+  const previousHistory = sameTarget && Array.isArray(current.publicWaitHistory) ? current.publicWaitHistory : [];
+  const lastSnapshot = previousHistory[previousHistory.length - 1];
+  const publicWaitHistory = lastSnapshot?.count === nextWaitCount
+    ? previousHistory
+    : [...previousHistory, { count: nextWaitCount, recordedAt: checkedAt }].slice(-120);
   const next = {
     ...current,
     ...incoming,
@@ -147,8 +155,9 @@ async function syncApplication(application) {
     publicWaitCount: nextWaitCount,
     publicWaitBreakdown,
     publicWaitPreviousCount: previousWaitCount,
-    publicWaitUpdatedAt: new Date().toISOString(),
-    checkedAt: new Date().toISOString(),
+    publicWaitHistory,
+    publicWaitUpdatedAt: checkedAt,
+    checkedAt,
     matched: row,
   };
   state.applications[application.id] = next;
@@ -162,7 +171,7 @@ async function syncApplication(application) {
     await sendExpoPush(incoming.pushToken, `${row.hsmpNm} ${housingTypeText} 대기현황 변동`, body);
   }
 
-  return { id: application.id, status: 'synced', changed, publicWaitCount: nextWaitCount, previousWaitCount, publicWaitBreakdown, matched: row };
+  return { id: application.id, status: 'synced', changed, publicWaitCount: nextWaitCount, previousWaitCount, publicWaitBreakdown, publicWaitHistory, matched: row };
 }
 
 function formatVacancyLabel(label) {

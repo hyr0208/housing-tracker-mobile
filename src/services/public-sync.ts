@@ -1,4 +1,4 @@
-import type { HousingApplication, PublicWaitBreakdown } from '@/data/storage';
+import type { HousingApplication, PublicWaitBreakdown, WaitCountSnapshot } from '@/data/storage';
 
 export type PublicWaitSyncResult = {
   status: 'synced' | 'no_match' | 'error';
@@ -6,6 +6,7 @@ export type PublicWaitSyncResult = {
   publicWaitCount?: number;
   previousWaitCount?: number;
   publicWaitBreakdown?: PublicWaitBreakdown[];
+  publicWaitHistory?: WaitCountSnapshot[];
   matched?: {
     hsmpNm?: string;
     drwtUnit?: string;
