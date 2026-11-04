@@ -27,6 +27,7 @@ import {
   type UserProfile,
 } from '@/data/storage';
 import { AddTaskSheet } from '@/components/add-task-sheet';
+import { TrendChart } from '@/components/trend-chart';
 import { syncPublicWait } from '@/services/public-sync';
 import { estimateWait, formatWaitEstimate, shortWaitEstimate } from '@/services/wait-estimate';
 import { searchComplexes, type ComplexSearchResult } from '@/services/complex-search';
@@ -753,6 +754,8 @@ export default function HomeScreen() {
                   <Text style={styles.estimateText}>{formatWaitEstimate(waitEstimate)}</Text>
                   {waitEstimate.status === 'estimated' && <Text style={styles.estimateBasis}>최근 {waitEstimate.days}일 동안 대기인원이 {waitEstimate.decrease}명 줄어든 속도와 {estimatedRank !== undefined ? '예상' : '현재'} 순번 {estimatedRank ?? selected.rank}번 기준이에요. 공가 발생에 따라 크게 달라질 수 있어요.</Text>}
                 </View>}
+                <TrendChart title="내 순번 변화" unit="번" points={selected.history.map((snapshot) => ({ value: snapshot.rank, recordedAt: snapshot.recordedAt }))} emptyText="순번을 두 번 이상 기록하면 변화를 그래프로 보여드려요." />
+                {selected.syncStatus === 'synced' && <TrendChart title="대기인원 변화" unit="명" points={(selected.publicWaitHistory ?? []).map((snapshot) => ({ value: snapshot.count, recordedAt: snapshot.recordedAt }))} emptyText="대기인원이 바뀌면 날짜별로 기록해 그래프로 보여드려요." />}
                 {selected.syncStatus === 'synced' && <Text style={styles.sheetFootnote}>서버가 주기적으로 확인하는 공개 대기인원이에요.</Text>}
                 {selected.publicWaitUpdatedAt && <Text style={styles.sheetUpdated}>마지막 확인 {new Date(selected.publicWaitUpdatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text>}
               </> : <>
