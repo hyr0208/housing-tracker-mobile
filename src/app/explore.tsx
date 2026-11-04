@@ -35,7 +35,7 @@ export default function ApplicationsScreen() {
             <View style={styles.loginGateCard}>
               <Text style={styles.loginGateIcon}>♧</Text>
               <Text style={styles.loginGateTitle}>내 정보부터 연결해 주세요</Text>
-              <Text style={styles.loginGateText}>카카오 로그인 후 신청 내역을 등록하고 알림을 받을 수 있어요.</Text>
+              <Text style={styles.loginGateText}>로그인 후 신청 내역을 등록하고 알림을 받을 수 있어요.</Text>
               <Pressable style={styles.loginGateButton} onPress={() => router.replace('/')}>
                 <Text style={styles.loginGateButtonText}>홈에서 로그인하기  →</Text>
               </Pressable>
