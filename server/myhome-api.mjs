@@ -130,9 +130,7 @@ async function fetchWaitingPage(brtcCode, pageNo, numOfRows) {
 }
 
 // 한 지역의 대기현황 전체. 요청 한 번이 크기와 상관없이 몇 초씩 걸려서, 첫 페이지로 전체 건수를 알아낸 뒤 나머지를 동시에 받는다.
-export async function fetchAllWaitingRows(brtcCode) {
-  const cached = allRowsCache.get(brtcCode);
-  if (cached && cached.expiresAt > Date.now()) return cached.rows;
+async function loadAllWaitingRows(brtcCode) {
   const numOfRows = 500;
   const first = await fetchWaitingPage(brtcCode, 1, numOfRows);
   const pageCount = Math.min(20, Math.ceil(first.totalCount / numOfRows));
@@ -144,6 +142,36 @@ export async function fetchAllWaitingRows(brtcCode) {
   const rows = [first, ...rest].flatMap((page) => page.items);
   allRowsCache.set(brtcCode, { rows, expiresAt: Date.now() + allRowsCacheTtlMs });
   return rows;
+}
+
+const allRowsInFlight = new Map();
+
+function refreshAllWaitingRows(brtcCode) {
+  // 같은 지역을 여러 사람이 동시에 찾아도 마이홈에는 한 번만 요청한다.
+  if (!allRowsInFlight.has(brtcCode)) {
+    allRowsInFlight.set(brtcCode, loadAllWaitingRows(brtcCode).finally(() => allRowsInFlight.delete(brtcCode)));
+  }
+  return allRowsInFlight.get(brtcCode);
+}
+
+export async function fetchAllWaitingRows(brtcCode) {
+  const cached = allRowsCache.get(brtcCode);
+  if (cached && cached.expiresAt > Date.now()) return cached.rows;
+  // 기한이 지난 목록이 있으면 일단 그걸 돌려주고 뒤에서 새로 받는다. 대기인원은 몇 시간 늦어도 괜찮다.
+  if (cached) {
+    void refreshAllWaitingRows(brtcCode).catch(() => undefined);
+    return cached.rows;
+  }
+  return refreshAllWaitingRows(brtcCode);
+}
+
+export const BRTC_CODES = ['11', '26', '27', '28', '29', '30', '31', '36', '41', '42', '43', '44', '45', '46', '47', '48', '50'];
+
+// 모든 지역 목록을 미리 받아 둬서 단지 검색과 대기현황 탐색이 바로 뜨게 한다. 마이홈 API에 몰리지 않게 지역을 하나씩 받는다.
+export async function warmAllWaitingRows() {
+  for (const brtcCode of BRTC_CODES) {
+    await refreshAllWaitingRows(brtcCode).catch(() => undefined);
+  }
 }
 
 export function normalizeName(value = '') {

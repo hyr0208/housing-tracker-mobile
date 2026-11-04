@@ -172,6 +172,7 @@ export default function HomeScreen() {
   const [searchFeedback, setSearchFeedback] = useState('');
   const [isSearchFailed, setIsSearchFailed] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const searchAbortRef = useRef<AbortController | null>(null);
   const [draftProfileName, setDraftProfileName] = useState('');
   const [titleInputError, setTitleInputError] = useState(false);
   const [rankInputError, setRankInputError] = useState(false);
@@ -522,22 +523,35 @@ export default function HomeScreen() {
       showDialog('검색 정보가 필요해요', '지역을 먼저 입력하고 단지명이나 공고명으로 검색해주세요.\n예: 경기 성남시 / 성남산단', { tone: 'info' });
       return;
     }
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
     setIsSearching(true);
     setIsSearchFailed(false);
     setSearchFeedback('공식 공고를 찾고 있어요…');
     try {
-      const results = await searchComplexes(keyword, brtcCode);
+      const results = await searchComplexes(keyword, brtcCode, controller.signal);
       setSearchResults(results);
       setSearchFeedback(results.length > 0 ? `${results.length}개의 공식 단지를 찾았어요. 하나를 선택해주세요.` : '검색 결과가 없어요. 지역이나 검색어를 조금 바꿔보세요.');
     } catch (error) {
+      if (controller.signal.aborted) return;
       const message = error instanceof Error ? error.message : '잠시 후 다시 시도해주세요.';
       setSearchResults([]);
       setIsSearchFailed(true);
       setSearchFeedback(`${message} 검색이 계속 안 되면 아래에 단지명을 직접 입력해주세요.`);
       showDialog('공고 검색 실패', message, { tone: 'error' });
     } finally {
-      setIsSearching(false);
+      if (searchAbortRef.current === controller) {
+        searchAbortRef.current = null;
+        setIsSearching(false);
+      }
     }
+  };
+
+  const cancelSearch = () => {
+    searchAbortRef.current?.abort();
+    searchAbortRef.current = null;
+    setIsSearching(false);
+    setSearchFeedback('검색을 취소했어요.');
   };
 
   const chooseOfficialComplex = (result: ComplexSearchResult) => {
@@ -850,7 +864,7 @@ export default function HomeScreen() {
             <Text style={styles.inputLabel}>공고·단지 검색</Text>
             <View style={styles.searchRow}>
               <TextInput value={draftSearchKeyword} onChangeText={setDraftSearchKeyword} onSubmitEditing={() => void searchOfficialComplexes()} returnKeyType="search" placeholder="예: 성남산단 또는 마곡" placeholderTextColor="#a9b4ae" style={styles.searchInput} />
-              <Pressable style={styles.searchButton} onPress={() => void searchOfficialComplexes()} disabled={isSearching}><Text style={styles.searchButtonText}>{isSearching ? '검색 중' : '검색'}</Text></Pressable>
+              {isSearching ? <Pressable style={[styles.searchButton, styles.searchCancelButton]} onPress={cancelSearch} accessibilityLabel="검색 취소"><Text style={[styles.searchButtonText, styles.searchCancelText]}>취소</Text></Pressable> : <Pressable style={styles.searchButton} onPress={() => void searchOfficialComplexes()}><Text style={styles.searchButtonText}>검색</Text></Pressable>}
             </View>
             <Text style={styles.inputHint}>지역을 먼저 입력해야 정확한 공식 공고를 찾을 수 있어요.</Text>
             {!!searchFeedback && <Text style={[styles.searchFeedback, isSearching && styles.searchFeedbackLoading, isSearchFailed && styles.searchFeedbackError]}>{searchFeedback}</Text>}
@@ -1123,6 +1137,8 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, height: 44, backgroundColor: '#fbfcfb', borderWidth: 1, borderColor: COLORS.line, borderRadius: 10, paddingHorizontal: 12, color: '#52635b', fontSize: 14 },
   searchButton: { height: 44, minWidth: 61, borderRadius: 10, backgroundColor: '#e0f1e8', alignItems: 'center', justifyContent: 'center' },
   searchButtonText: { color: '#438d75', fontSize: 13, fontWeight: '800' },
+  searchCancelButton: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e4c8c0' },
+  searchCancelText: { color: '#c46f5d' },
   searchFeedback: { color: '#5c8976', fontSize: 11, lineHeight: 17, marginTop: 7 },
   searchFeedbackLoading: { color: '#8c9c94' },
   searchFeedbackError: { color: '#d47d6c' },

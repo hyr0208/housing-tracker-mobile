@@ -11,12 +11,13 @@ export type ComplexSearchResult = {
 
 const syncServerUrl = (process.env.EXPO_PUBLIC_SYNC_SERVER_URL || 'http://127.0.0.1:8787').replace(/\/$/, '');
 
-export async function searchComplexes(keyword: string, brtcCode: string): Promise<ComplexSearchResult[]> {
+export async function searchComplexes(keyword: string, brtcCode: string, signal?: AbortSignal): Promise<ComplexSearchResult[]> {
   const query = new URLSearchParams({ keyword, brtcCode });
   let response: Response;
   try {
-    response = await fetch(`${syncServerUrl}/api/complex-search?${query.toString()}`);
-  } catch {
+    response = await fetch(`${syncServerUrl}/api/complex-search?${query.toString()}`, { signal });
+  } catch (error) {
+    if (signal?.aborted) throw error;
     throw new Error('서버에 연결하지 못했어요. 인터넷 연결을 확인하고 다시 시도해주세요.');
   }
   // 서버 내부 오류나 프록시 HTML 응답은 원문 대신 안내 문구로 바꿔 보여준다.

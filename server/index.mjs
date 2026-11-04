@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fetchAllWaitingRows, fetchWaitingRows, findMatchingRows, searchComplexRows } from './myhome-api.mjs';
+import { fetchAllWaitingRows, fetchWaitingRows, findMatchingRows, searchComplexRows, warmAllWaitingRows } from './myhome-api.mjs';
 import { fetchVacancyStatus } from './lh-vacancy-api.mjs';
 import { createSessionToken, exchangeAuthorizationCode, revokeAppleToken, verifyAppleIdentityToken, verifySessionToken } from './apple-auth.mjs';
 import { verifyReviewAccount } from './review-auth.mjs';
@@ -442,7 +442,8 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, 400, { error: '검색어와 지역 정보가 필요합니다.' });
         return;
       }
-      const rows = await fetchWaitingRows({ brtcCode, searchKeyword: keyword });
+      // 지역 전체 목록(미리 받아 둔 캐시)에서 찾아서, 검색어마다 마이홈을 다시 부르지 않는다.
+      const rows = await fetchAllWaitingRows(brtcCode);
       sendJson(response, 200, { results: searchComplexRows(rows, { keyword, brtcCode }) });
       return;
     }
@@ -500,4 +501,6 @@ if (runOnce) {
   });
   void syncAll().catch(() => undefined);
   setInterval(() => { void syncAll(); }, syncIntervalMs);
+  void warmAllWaitingRows();
+  setInterval(() => { void warmAllWaitingRows(); }, 3 * 60 * 60 * 1000);
 }
