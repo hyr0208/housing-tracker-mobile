@@ -32,6 +32,14 @@ export default function AppTabs() {
         />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="notices">
+          <NativeTabs.Trigger.Label>공고</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          src={require('@/assets/images/tabIcons/notices.png')}
+          renderingMode="template"
+        />
+      </NativeTabs.Trigger>
+
       {isLoggedIn && <NativeTabs.Trigger name="explore">
           <NativeTabs.Trigger.Label>내 신청</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon

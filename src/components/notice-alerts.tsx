@@ -74,14 +74,13 @@ export function NoticeAlertsSection() {
 
   return (
     <View style={styles.section}>
-      <Text style={styles.eyebrow}>NEW NOTICES</Text>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>새 모집공고</Text>
+        <Text style={styles.settingsTitle}>새 공고 알림</Text>
         <Pressable style={[styles.toggle, settings.enabled && styles.toggleOn]} onPress={toggleEnabled} accessibilityRole="switch" accessibilityState={{ checked: settings.enabled }}>
           <Text style={[styles.toggleText, settings.enabled && styles.toggleTextOn]}>{settings.enabled ? '알림 받는 중' : '알림 받기'}</Text>
         </Pressable>
       </View>
-      <Text style={styles.description}>관심 지역과 공급유형을 고르면 맞는 공고만 보여주고, 새 공고가 올라오면 알려드려요.</Text>
+      <Text style={styles.description}>관심 지역을 고르고 알림을 켜면, 조건에 맞는 새 공고가 올라올 때 알려드려요.</Text>
 
       <Text style={styles.groupLabel}>관심 지역</Text>
       <View style={styles.chips}>
@@ -115,10 +114,9 @@ export function NoticeAlertsSection() {
 }
 
 const styles = StyleSheet.create({
-  section: { marginTop: 28 },
-  eyebrow: { color: '#7fa897', fontSize: 9, fontWeight: '800', letterSpacing: 2.2 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
-  title: { color: '#243b34', fontSize: 21, fontWeight: '800', letterSpacing: -0.8 },
+  section: { marginTop: 20 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  settingsTitle: { color: '#243b34', fontSize: 15, fontWeight: '800' },
   toggle: { borderRadius: 9, borderWidth: 1, borderColor: '#cfe3d9', paddingHorizontal: 11, paddingVertical: 7, backgroundColor: '#fff' },
   toggleOn: { backgroundColor: '#327e67', borderColor: '#327e67' },
   toggleText: { color: '#38856d', fontSize: 11, fontWeight: '800' },
