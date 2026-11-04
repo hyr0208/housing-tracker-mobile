@@ -23,6 +23,10 @@ const publicPages = {
 const port = Number(process.env.PORT || 8787);
 const syncIntervalMs = Number(process.env.SYNC_INTERVAL_MINUTES || 60) * 60 * 1000;
 const runOnce = process.argv.includes('--once');
+const kakaoAppId = process.env.KAKAO_APP_ID?.trim() || '';
+if (!kakaoAppId) console.warn('KAKAO_APP_ID가 없어 카카오 토큰의 발급 앱을 확인하지 않습니다. 카카오 콘솔의 앱 ID를 설정하세요.');
+// 계정 저장 요청이 비정상적으로 크면 서버 메모리를 쓰기 전에 끊는다.
+const maxBodyBytes = 2 * 1024 * 1024;
 
 async function readState() {
   try {
@@ -47,7 +51,9 @@ async function readAccounts() {
 
 async function writeAccounts(accounts) {
   await fs.mkdir(stateDir, { recursive: true });
-  await fs.writeFile(accountsPath, JSON.stringify(accounts, null, 2));
+  // 계정 데이터는 서버 사용자만 읽을 수 있게 저장한다.
+  await fs.writeFile(accountsPath, JSON.stringify(accounts, null, 2), { mode: 0o600 });
+  await fs.chmod(accountsPath, 0o600).catch(() => undefined);
 }
 
 async function readAppleTokens() {
@@ -70,12 +76,14 @@ async function getUserId(request) {
   const accessToken = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!accessToken) return null;
   if (accessToken.startsWith('hts.')) return verifySessionToken(stateDir, accessToken);
-  const response = await fetch('https://kapi.kakao.com/v2/user/me', {
+  // 다른 카카오 앱에서 발급된 토큰으로 우리 계정 데이터에 접근하지 못하게, 토큰이 이 앱(KAKAO_APP_ID) 것인지 확인한다.
+  const response = await fetch('https://kapi.kakao.com/v1/user/access_token_info', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) return null;
-  const user = await response.json();
-  return user.id ? String(user.id) : null;
+  const info = await response.json();
+  if (kakaoAppId && String(info.app_id) !== kakaoAppId) return null;
+  return info.id ? String(info.id) : null;
 }
 
 function sendJson(response, status, body) {
@@ -89,7 +97,12 @@ function sendJson(response, status, body) {
 
 async function readBody(request) {
   const chunks = [];
-  for await (const chunk of request) chunks.push(chunk);
+  let size = 0;
+  for await (const chunk of request) {
+    size += chunk.length;
+    if (size > maxBodyBytes) throw new Error('요청이 너무 큽니다.');
+    chunks.push(chunk);
+  }
   return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
 }
 

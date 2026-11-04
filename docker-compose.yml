@@ -9,6 +9,7 @@ services:
       PORT: "8787"
       SYNC_INTERVAL_MINUTES: "60"
       MYHOME_API_KEY: ${MYHOME_API_KEY:?Set MYHOME_API_KEY in the project environment}
+      KAKAO_APP_ID: ${KAKAO_APP_ID:-}
     ports:
       - "8787:8787"
     volumes:
