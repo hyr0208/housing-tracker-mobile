@@ -25,7 +25,8 @@ function formatDay(recordedAt: string) {
 // 새 네이티브 라이브러리 없이(OTA로 배포 가능하게) View를 회전시켜 선분을 만든다.
 export function TrendChart({ title, points, unit, emptyText }: TrendChartProps) {
   const [width, setWidth] = useState(0);
-  const recent = points.slice(-12);
+  // 지난 기록을 나중에 끼워 넣을 수 있으므로 날짜순으로 정렬해서 그린다.
+  const recent = [...points].sort((a, b) => a.recordedAt.localeCompare(b.recordedAt)).slice(-12);
 
   if (recent.length < 2) {
     return (

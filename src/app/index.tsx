@@ -24,12 +24,14 @@ import {
   type AppData,
   type AppNotification,
   type HousingApplication,
+  type RankSnapshot,
   type UserProfile,
 } from '@/data/storage';
 import { AddTaskSheet } from '@/components/add-task-sheet';
 import { AddEventSheet } from '@/components/add-event-sheet';
 import { formatDday, formatEventDate, kindLabel, syncScheduleReminders, upcomingEvents } from '@/services/schedule';
 import { TrendChart } from '@/components/trend-chart';
+import { RankHistorySheet } from '@/components/rank-history-sheet';
 import { ComplexInfoPanel } from '@/components/complex-info';
 import { syncPublicWait } from '@/services/public-sync';
 import { estimateWait, formatWaitEstimate, shortWaitEstimate } from '@/services/wait-estimate';
@@ -148,6 +150,7 @@ export default function HomeScreen() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingApplicationId, setEditingApplicationId] = useState<string | undefined>();
   const [isRankOpen, setIsRankOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
   const [isAddEventOpen, setIsAddEventOpen] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -657,6 +660,24 @@ export default function HomeScreen() {
     setIsAddOpen(false);
   };
 
+  // 지난 순번 기록을 고치면 날짜순으로 정렬하고, 가장 최근 기록을 현재 순번으로 삼는다.
+  const saveRankHistory = (nextHistory: RankSnapshot[]) => {
+    if (!selected || nextHistory.length === 0) return;
+    const history = [...nextHistory].sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
+    const latest = history[history.length - 1];
+    const previousLatest = [...selected.history].sort((a, b) => a.recordedAt.localeCompare(b.recordedAt)).at(-1);
+    const latestChanged = previousLatest?.recordedAt !== latest.recordedAt || previousLatest?.rank !== latest.rank;
+    const updated: HousingApplication = {
+      ...selected,
+      history,
+      rank: latest.rank,
+      previousRank: history.length > 1 ? history[history.length - 2].rank : latest.rank,
+      // 예상 순번은 마지막으로 기록한 순번부터 다시 계산한다.
+      ...(latestChanged ? { waitAdvance: 0 } : {}),
+    };
+    updateData({ ...data, applications: applications.map((item) => item.id === selected.id ? updated : item) });
+  };
+
   const saveRank = () => {
     if (!selected) return;
     const nextRank = Number(draftRank);
@@ -788,6 +809,7 @@ export default function HomeScreen() {
                   {waitEstimate.status === 'estimated' && <Text style={styles.estimateBasis}>최근 {waitEstimate.days}일 동안 대기인원이 {waitEstimate.decrease}명 줄어든 속도와 {estimatedRank !== undefined ? '예상' : '현재'} 순번 {estimatedRank ?? selected.rank}번 기준이에요. 공가 발생에 따라 크게 달라질 수 있어요.</Text>}
                 </View>}
                 <TrendChart title="내 순번 변화" unit="번" points={selected.history.map((snapshot) => ({ value: snapshot.rank, recordedAt: snapshot.recordedAt }))} emptyText="순번을 두 번 이상 기록하면 변화를 그래프로 보여드려요." />
+                <Pressable style={styles.chartLink} onPress={() => { setStatusSheet(null); setIsHistoryOpen(true); }}><Text style={styles.chartLinkText}>앱 쓰기 전 순번도 입력하기 ›</Text></Pressable>
                 {selected.syncStatus === 'synced' && <TrendChart title="대기인원 변화" unit="명" points={(selected.publicWaitHistory ?? []).map((snapshot) => ({ value: snapshot.count, recordedAt: snapshot.recordedAt }))} emptyText="대기인원이 바뀌면 날짜별로 기록해 그래프로 보여드려요." />}
                 {selected.syncStatus === 'synced' && <Text style={styles.sheetFootnote}>서버가 주기적으로 확인하는 공개 대기인원이에요.</Text>}
                 {selected.publicWaitUpdatedAt && <Text style={styles.sheetUpdated}>마지막 확인 {new Date(selected.publicWaitUpdatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text>}
@@ -867,13 +889,15 @@ export default function HomeScreen() {
       </Modal>
 
       {selected && <Modal visible={isRankOpen} transparent animationType="slide" onRequestClose={() => setIsRankOpen(false)}>
-        <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsRankOpen(false)} accessibilityLabel="닫기" /><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>UPDATE RANK</Text><Text style={styles.modalTitle}>현재 순번 기록</Text></View><Pressable onPress={() => setIsRankOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>{selected.title}의 공고문이나 대기현황에서 확인한 최신 순번을 입력하세요.</Text><Text style={styles.inputLabel}>현재 예비순번</Text><TextInput value={draftRank} onChangeText={setDraftRank} keyboardType="number-pad" placeholder="예: 24" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Pressable onPress={() => void Linking.openURL(LH_APPLY_URL)} style={styles.lhLink}><Text style={styles.lhLinkText}>LH청약플러스에서 내 순번 확인하기 ↗</Text></Pressable><Text style={styles.historyTitle}>최근 순번 이력</Text><View style={styles.historyList}>{selected.history.slice(-3).reverse().map((snapshot) => <View key={`${snapshot.recordedAt}-${snapshot.rank}`} style={styles.historyRow}><Text style={styles.historyDate}>{snapshot.recordedAt}</Text><Text style={styles.historyRank}>{snapshot.rank}번</Text></View>)}</View><Pressable style={styles.saveButton} onPress={saveRank}><Text style={styles.saveButtonText}>순번 업데이트 저장  →</Text></Pressable></View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
+        <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsRankOpen(false)} accessibilityLabel="닫기" /><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>UPDATE RANK</Text><Text style={styles.modalTitle}>현재 순번 기록</Text></View><Pressable onPress={() => setIsRankOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>{selected.title}의 공고문이나 대기현황에서 확인한 최신 순번을 입력하세요.</Text><Text style={styles.inputLabel}>현재 예비순번</Text><TextInput value={draftRank} onChangeText={setDraftRank} keyboardType="number-pad" placeholder="예: 24" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Pressable onPress={() => void Linking.openURL(LH_APPLY_URL)} style={styles.lhLink}><Text style={styles.lhLinkText}>LH청약플러스에서 내 순번 확인하기 ↗</Text></Pressable><View style={styles.historyHeader}><Text style={styles.historyTitle}>최근 순번 이력</Text><Pressable onPress={() => { setIsRankOpen(false); setIsHistoryOpen(true); }} hitSlop={8}><Text style={styles.historyManage}>지난 기록 추가 ›</Text></Pressable></View><View style={styles.historyList}>{selected.history.slice(-3).reverse().map((snapshot) => <View key={`${snapshot.recordedAt}-${snapshot.rank}`} style={styles.historyRow}><Text style={styles.historyDate}>{snapshot.recordedAt}</Text><Text style={styles.historyRank}>{snapshot.rank}번</Text></View>)}</View><Pressable style={styles.saveButton} onPress={saveRank}><Text style={styles.saveButtonText}>순번 업데이트 저장  →</Text></Pressable></View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
       </Modal>}
 
       <AddTaskSheet visible={isAddTaskOpen} onClose={() => setIsAddTaskOpen(false)} onAdd={(title, detail) => {
         updateData({ ...data, tasks: [...tasks, { id: `task-${Date.now()}`, title, detail: detail || '직접 추가한 준비 항목', done: false }] });
         setIsAddTaskOpen(false);
       }} />
+
+      {selected && <RankHistorySheet visible={isHistoryOpen} history={selected.history} onClose={() => setIsHistoryOpen(false)} onSave={saveRankHistory} />}
 
       <AddEventSheet visible={isAddEventOpen} onClose={() => setIsAddEventOpen(false)} onAdd={(title, kind, date) => {
         updateData({ ...data, events: [...(data.events ?? []), { id: `event-${Date.now()}`, title, kind, date }] });
@@ -1122,7 +1146,11 @@ const styles = StyleSheet.create({
   estimateBasis: { color: '#72a391', fontSize: 11, marginTop: 6, lineHeight: 17 },
   lhLink: { alignSelf: 'flex-start', marginTop: 9 },
   lhLinkText: { color: '#38856d', fontSize: 12, fontWeight: '800' },
-  historyTitle: { color: '#61736a', fontSize: 12, fontWeight: '800', marginTop: 19 },
+  historyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 19 },
+  historyTitle: { color: '#61736a', fontSize: 12, fontWeight: '800' },
+  historyManage: { color: '#38856d', fontSize: 12, fontWeight: '800' },
+  chartLink: { alignSelf: 'flex-end', marginTop: 8 },
+  chartLinkText: { color: '#38856d', fontSize: 12, fontWeight: '800' },
   historyList: { marginTop: 6, backgroundColor: '#f7faf8', borderRadius: 9, paddingHorizontal: 10 },
   historyRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#eaf0ec' },
   historyDate: { color: '#9aa9a1', fontSize: 11 },
