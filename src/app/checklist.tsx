@@ -60,8 +60,8 @@ export default function ChecklistScreen() {
   };
 
   return (
-    <View style={styles.screen}>
-      <SafeAreaView style={styles.safe} edges={['top']}>
+    // Android에서 탭을 다시 누르면 맨 위로 올라가려면 ScrollView가 화면의 첫 자식 줄에 있어야 해서, 바깥 View 없이 SafeAreaView를 루트로 둔다.
+    <SafeAreaView style={styles.screen} edges={['top']}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Text style={styles.eyebrow}>MOVE-IN CHECKLIST</Text>
           <Text style={styles.title}>입주 준비 체크리스트</Text>
@@ -81,20 +81,18 @@ export default function ChecklistScreen() {
 
           {visibleTasks.length === 0 ? <Pressable style={({ pressed }) => [styles.emptyCard, pressed && filter !== 'done' && styles.emptyCardPressed]} disabled={filter === 'done'} onPress={() => setIsAddOpen(true)} accessibilityRole="button"><Text style={styles.emptyIcon}>{filter === 'done' ? '✓' : '＋'}</Text><Text style={styles.emptyTitle}>{filter === 'done' ? '아직 완료한 일이 없어요' : filter === 'active' ? '모든 준비를 끝냈어요' : '체크리스트가 비어 있어요'}</Text><Text style={styles.emptyText}>{filter === 'done' ? '할 일을 완료하면 여기에 모여요.' : '여기를 눌러 필요한 준비 항목을 추가해보세요.'}</Text></Pressable> : <View style={styles.taskList}>{visibleTasks.map((task, index) => <View key={task.id} style={[styles.taskRow, task.done && styles.taskRowDone]}><Pressable style={styles.taskMain} onPress={() => toggleTask(task.id)}><View style={[styles.checkbox, task.done && styles.checkboxDone]}>{task.done && <Text style={styles.checkMark}>✓</Text>}</View><View style={styles.taskCopy}><Text style={[styles.taskTitle, task.done && styles.taskTitleDone]}>{task.title}</Text><Text style={styles.taskDetail}>{task.detail}</Text></View></Pressable><Pressable style={styles.deleteButton} onPress={() => deleteTask(task)}><Text style={styles.deleteText}>×</Text></Pressable></View>)}</View>}
         </ScrollView>
-      </SafeAreaView>
 
       <AddTaskSheet visible={isAddOpen} onClose={() => setIsAddOpen(false)} onAdd={addTask} />
 
       <Modal visible={Boolean(dialog)} transparent animationType="fade" onRequestClose={() => setDialog(null)}>
         <View style={styles.dialogBackdrop}><View style={styles.dialogCard}><View style={styles.dialogIcon}><Text style={styles.dialogIconText}>!</Text></View><Text style={styles.dialogTitle}>{dialog?.title}</Text><Text style={styles.dialogMessage}>{dialog?.message}</Text><View style={styles.dialogActions}><Pressable style={styles.dialogCancelButton} onPress={() => setDialog(null)}><Text style={styles.dialogCancelText}>취소</Text></Pressable><Pressable style={styles.dialogConfirmButton} onPress={() => { const action = dialog?.onConfirm; setDialog(null); action?.(); }}><Text style={styles.dialogConfirmText}>삭제</Text></Pressable></View></View></View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f4f7f3' },
-  safe: { flex: 1 },
   content: { paddingHorizontal: 22, paddingTop: 26, paddingBottom: 110 },
   eyebrow: { color: '#9aa9a1', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
   title: { color: '#243b34', fontSize: 28, fontWeight: '800', letterSpacing: -1.4, marginTop: 9 },

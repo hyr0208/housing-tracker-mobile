@@ -712,8 +712,8 @@ export default function HomeScreen() {
   if (!isReady) return <View style={styles.screen} />;
 
   return (
-    <View style={styles.screen}>
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+    // Android에서 탭을 다시 누르면 맨 위로 올라가려면 ScrollView가 화면의 첫 자식 줄에 있어야 해서, 바깥 View 없이 SafeAreaView를 루트로 둔다.
+    <SafeAreaView style={styles.screen} edges={['top']}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 92 }}>
           <View style={styles.header}>
             <View style={styles.brandLine}>
@@ -792,7 +792,6 @@ export default function HomeScreen() {
             <Pressable style={styles.guestButton} onPress={() => isLoggedIn ? setIsAddOpen(true) : setIsProfileOpen(true)}><Text style={styles.guestButtonText}>{isLoggedIn ? '신청 내역 추가하기  →' : '로그인하기  →'}</Text></Pressable>
           </View>}
         </ScrollView>
-      </SafeAreaView>
 
       {selected && <Modal visible={statusSheet !== null} transparent animationType="slide" onRequestClose={() => setStatusSheet(null)}>
         <View style={styles.statusSheetBackdrop}>
@@ -929,13 +928,12 @@ export default function HomeScreen() {
       </Modal>
 
       {dialog && !isAddOpen && !isRankOpen && !isNotificationOpen && !isProfileOpen && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.canvas },
-  safeArea: { flex: 1 },
   header: { height: 62, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   brandLine: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },

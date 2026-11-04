@@ -37,8 +37,8 @@ export default function NoticesScreen() {
   const contentStyle = useAnimatedStyle(() => ({ opacity: contentOpacity.value, transform: [{ translateX: contentShift.value }] }));
 
   return (
-    <View style={styles.screen}>
-      <SafeAreaView style={styles.safe} edges={['top']}>
+    // Android에서 탭을 다시 누르면 맨 위로 올라가려면 ScrollView가 화면의 첫 자식 줄에 있어야 해서, 바깥 View 없이 SafeAreaView를 루트로 둔다.
+    <SafeAreaView style={styles.screen} edges={['top']}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Text style={styles.eyebrow}>NEW NOTICES</Text>
           <Text style={styles.title}>{mode === 'notices' ? '모집공고' : '단지별 대기현황'}</Text>
@@ -52,14 +52,12 @@ export default function NoticesScreen() {
             {hasOpenedWaiting && <View style={mode === 'waiting' ? undefined : styles.hidden}><WaitingExplore /></View>}
           </Animated.View>
         </ScrollView>
-      </SafeAreaView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f4f7f3' },
-  safe: { flex: 1 },
   content: { paddingHorizontal: 22, paddingTop: 26, paddingBottom: 100 },
   eyebrow: { color: '#9aa9a1', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
   title: { color: '#243b34', fontSize: 29, fontWeight: '800', letterSpacing: -1.4, marginTop: 9 },
