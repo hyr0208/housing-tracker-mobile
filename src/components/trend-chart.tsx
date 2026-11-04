@@ -77,13 +77,13 @@ export function TrendChart({ title, points, unit, emptyText }: TrendChartProps) 
 const styles = StyleSheet.create({
   panel: { width: '100%', marginTop: 12, borderRadius: 12, backgroundColor: '#f7faf8', paddingHorizontal: 14, paddingVertical: 12 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { color: '#587368', fontSize: 10, fontWeight: '800' },
-  summary: { color: '#428b72', fontSize: 10, fontWeight: '800' },
-  empty: { color: '#9aa9a1', fontSize: 9, marginTop: 6 },
+  title: { color: '#587368', fontSize: 13, fontWeight: '800' },
+  summary: { color: '#428b72', fontSize: 13, fontWeight: '800' },
+  empty: { color: '#9aa9a1', fontSize: 12, marginTop: 6 },
   chart: { height: CHART_HEIGHT, marginTop: 10 },
   line: { position: 'absolute', height: 2, borderRadius: 1, backgroundColor: '#83c4aa' },
   dot: { position: 'absolute', width: DOT, height: DOT, borderRadius: DOT / 2, backgroundColor: '#fff', borderWidth: 2, borderColor: '#4ba989' },
   lastDot: { backgroundColor: '#327e67', borderColor: '#327e67' },
   axis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-  axisText: { color: '#9aa9a1', fontSize: 9 },
+  axisText: { color: '#9aa9a1', fontSize: 12 },
 });
