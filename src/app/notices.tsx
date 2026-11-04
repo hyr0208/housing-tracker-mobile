@@ -16,6 +16,7 @@ export default function NoticesScreen() {
   const [hasOpenedWaiting, setHasOpenedWaiting] = useState(false);
   const [segmentWidth, setSegmentWidth] = useState(0);
   const indicator = useSharedValue(0);
+  const indicatorWidth = useSharedValue(0);
   const contentOpacity = useSharedValue(1);
   const contentShift = useSharedValue(0);
 
@@ -33,7 +34,8 @@ export default function NoticesScreen() {
   };
 
   const itemWidth = segmentWidth > 0 ? (segmentWidth - 6) / MODES.length : 0;
-  const indicatorStyle = useAnimatedStyle(() => ({ width: itemWidth, transform: [{ translateX: indicator.value * itemWidth }] }));
+  // 폭은 일반 스타일로 넘긴다. 애니메이션 스타일 안에서 JS 값을 읽으면 릴리스 빌드에서 처음 폭이 반영되지 않아 표시가 안 보였다.
+  const indicatorStyle = useAnimatedStyle(() => ({ transform: [{ translateX: indicator.value * indicatorWidth.value }] }));
   const contentStyle = useAnimatedStyle(() => ({ opacity: contentOpacity.value, transform: [{ translateX: contentShift.value }] }));
 
   return (
@@ -43,8 +45,8 @@ export default function NoticesScreen() {
           <Text style={styles.eyebrow}>NEW NOTICES</Text>
           <Text style={styles.title}>{mode === 'notices' ? '모집공고' : '단지별 대기현황'}</Text>
           <Text style={styles.subtitle}>{mode === 'notices' ? '지금 접수 중이거나 곧 접수하는 공공임대 공고를 모아봤어요.' : '대기인원이 적은 단지부터 보여드려요.'}</Text>
-          <View style={styles.segment} onLayout={(event) => setSegmentWidth(event.nativeEvent.layout.width)}>
-            {itemWidth > 0 && <Animated.View style={[styles.segmentIndicator, indicatorStyle]} />}
+          <View style={styles.segment} onLayout={(event) => { const width = event.nativeEvent.layout.width; setSegmentWidth(width); indicatorWidth.value = (width - 6) / MODES.length; }}>
+            {itemWidth > 0 && <Animated.View style={[styles.segmentIndicator, { width: itemWidth }, indicatorStyle]} />}
             {MODES.map((item) => <Pressable key={item} style={styles.segmentItem} onPress={() => changeMode(item)} accessibilityRole="tab" accessibilityState={{ selected: mode === item }}><Text style={[styles.segmentText, mode === item && styles.segmentTextOn]}>{item === 'notices' ? '모집공고' : '대기현황'}</Text></Pressable>)}
           </View>
           <Animated.View style={contentStyle}>
