@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fetchAllWaitingRows, fetchWaitingRows, findMatchingRows, searchComplexRows, warmAllWaitingRows } from './myhome-api.mjs';
+import { fetchAllWaitingRows, findMatchingRows, searchComplexRows, useWaitingRowsCacheFile, warmAllWaitingRows } from './myhome-api.mjs';
 import { fetchVacancyStatus } from './lh-vacancy-api.mjs';
 import { createSessionToken, exchangeAuthorizationCode, revokeAppleToken, verifyAppleIdentityToken, verifySessionToken } from './apple-auth.mjs';
 import { verifyReviewAccount } from './review-auth.mjs';
@@ -27,6 +27,7 @@ const kakaoAppId = process.env.KAKAO_APP_ID?.trim() || '';
 if (!kakaoAppId) console.warn('KAKAO_APP_ID가 없어 카카오 토큰의 발급 앱을 확인하지 않습니다. 카카오 콘솔의 앱 ID를 설정하세요.');
 // 계정 저장 요청이 비정상적으로 크면 서버 메모리를 쓰기 전에 끊는다.
 const maxBodyBytes = 2 * 1024 * 1024;
+useWaitingRowsCacheFile(path.join(stateDir, 'waiting-rows-cache.json'));
 
 async function readState() {
   try {
@@ -124,7 +125,8 @@ async function syncApplication(application) {
   const state = await readState();
   const incoming = Object.fromEntries(Object.entries(application).filter(([, value]) => value !== undefined));
   const current = state.applications[application.id] ?? incoming;
-  const rows = await fetchWaitingRows(incoming);
+  // 같은 지역의 신청들이 한 번 받은 목록을 함께 쓴다. 자동 확인 주기마다 한 번씩만 새로 받는다.
+  const rows = await fetchAllWaitingRows(incoming.brtcCode, { maxAgeMs: syncIntervalMs - 5 * 60 * 1000 });
   const allMatches = findMatchingRows(rows, { ...incoming, housingType: undefined });
   const matches = findMatchingRows(rows, incoming);
 
@@ -411,7 +413,11 @@ const server = http.createServer(async (request, response) => {
         houseTy: url.searchParams.get('houseTy') || undefined,
         complexName: url.searchParams.get('complexName') || '',
       };
-      const rows = await fetchWaitingRows(application);
+      if (!application.brtcCode) {
+        sendJson(response, 400, { error: '광역시도 코드(brtcCode)가 필요합니다.' });
+        return;
+      }
+      const rows = await fetchAllWaitingRows(application.brtcCode);
       sendJson(response, 200, { rows: findMatchingRows(rows, application), totalCount: rows.length });
       return;
     }
@@ -515,5 +521,5 @@ if (runOnce) {
   void syncAll().catch(() => undefined);
   setInterval(() => { void syncAll(); }, syncIntervalMs);
   void warmAllWaitingRows();
-  setInterval(() => { void warmAllWaitingRows(); }, 3 * 60 * 60 * 1000);
+  setInterval(() => { void warmAllWaitingRows(); }, 60 * 60 * 1000);
 }

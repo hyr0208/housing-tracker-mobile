@@ -88,9 +88,7 @@ export async function fetchWaitingRows({ brtcCode, signguCode, suplyTy, houseTy,
 
     const response = await fetchWithRetry(url);
     if (!response.ok) {
-      if (response.status === 502 || response.status === 503 || response.status === 504) {
-        throw new Error('마이홈 공개 현황 서버가 잠시 응답하지 않았어요. 잠시 후 다시 확인해주세요.');
-      }
+      if ([429, 502, 503, 504].includes(response.status)) throw quotaAwareError(response);
       throw new Error(`마이홈 API HTTP 오류: ${response.status}`);
     }
     const payload = await response.json();
@@ -113,6 +111,30 @@ export async function fetchWaitingRows({ brtcCode, signguCode, suplyTy, houseTy,
 const allRowsCache = new Map();
 // 대기인원은 하루에 몇 번 바뀌지 않으므로 지역 전체 목록은 길게 캐시한다.
 const allRowsCacheTtlMs = 6 * 60 * 60 * 1000;
+// 마이홈 API는 하루 요청 수가 정해져 있어서, 서버를 다시 띄워도 처음부터 다시 받지 않게 목록을 파일로도 남긴다.
+let allRowsCachePath = '';
+
+export function useWaitingRowsCacheFile(filePath) {
+  allRowsCachePath = filePath;
+  try {
+    const saved = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    for (const [brtcCode, entry] of Object.entries(saved)) {
+      if (Array.isArray(entry?.rows) && entry.fetchedAt) allRowsCache.set(brtcCode, entry);
+    }
+  } catch {
+    // 처음 실행이거나 파일이 깨졌으면 비어 있는 채로 시작한다.
+  }
+}
+
+function saveAllRowsCache() {
+  if (!allRowsCachePath) return;
+  fs.promises.writeFile(allRowsCachePath, JSON.stringify(Object.fromEntries(allRowsCache))).catch(() => undefined);
+}
+
+function quotaAwareError(response) {
+  if (response.status === 429) return new Error('오늘 마이홈 조회 한도를 다 썼어요. 내일 다시 확인해주세요.');
+  return new Error('마이홈 공개 현황 서버가 잠시 응답하지 않았어요. 잠시 후 다시 확인해주세요.');
+}
 
 async function fetchWaitingPage(brtcCode, pageNo, numOfRows) {
   const url = new URL(API_BASE_URL);
@@ -121,7 +143,7 @@ async function fetchWaitingPage(brtcCode, pageNo, numOfRows) {
   url.searchParams.set('numOfRows', String(numOfRows));
   url.searchParams.set('pageNo', String(pageNo));
   const response = await fetchWithRetry(url);
-  if (!response.ok) throw new Error('마이홈 공개 현황 서버가 잠시 응답하지 않았어요. 잠시 후 다시 확인해주세요.');
+  if (!response.ok) throw quotaAwareError(response);
   const payload = await response.json();
   const header = payload?.response?.header;
   if (header?.resultCode !== '00') throw new Error(`마이홈 API 오류: ${header?.resultMsg || header?.resultCode || '알 수 없는 오류'}`);
@@ -140,7 +162,8 @@ async function loadAllWaitingRows(brtcCode) {
     rest.push(...await Promise.all(batch));
   }
   const rows = [first, ...rest].flatMap((page) => page.items);
-  allRowsCache.set(brtcCode, { rows, expiresAt: Date.now() + allRowsCacheTtlMs });
+  allRowsCache.set(brtcCode, { rows, fetchedAt: Date.now() });
+  saveAllRowsCache();
   return rows;
 }
 
@@ -154,23 +177,35 @@ function refreshAllWaitingRows(brtcCode) {
   return allRowsInFlight.get(brtcCode);
 }
 
-export async function fetchAllWaitingRows(brtcCode) {
+/**
+ * 지역 전체 대기현황. maxAgeMs보다 오래된 목록은 새로 받는다.
+ * 화면용 조회(maxAgeMs 생략)는 오래된 목록을 바로 돌려주고 뒤에서 새로 받고,
+ * 변동 알림용 조회(maxAgeMs 지정)는 새로 받을 때까지 기다리되 실패하면 갖고 있던 목록을 쓴다.
+ */
+export async function fetchAllWaitingRows(brtcCode, { maxAgeMs } = {}) {
   const cached = allRowsCache.get(brtcCode);
-  if (cached && cached.expiresAt > Date.now()) return cached.rows;
-  // 기한이 지난 목록이 있으면 일단 그걸 돌려주고 뒤에서 새로 받는다. 대기인원은 몇 시간 늦어도 괜찮다.
-  if (cached) {
-    void refreshAllWaitingRows(brtcCode).catch(() => undefined);
-    return cached.rows;
-  }
-  return refreshAllWaitingRows(brtcCode);
+  const age = cached ? Date.now() - cached.fetchedAt : Infinity;
+  if (cached && age < (maxAgeMs ?? allRowsCacheTtlMs)) return cached.rows;
+  if (!cached) return refreshAllWaitingRows(brtcCode);
+  if (maxAgeMs !== undefined) return refreshAllWaitingRows(brtcCode).catch(() => cached.rows);
+  void refreshAllWaitingRows(brtcCode).catch(() => undefined);
+  return cached.rows;
 }
 
 export const BRTC_CODES = ['11', '26', '27', '28', '29', '30', '31', '36', '41', '42', '43', '44', '45', '46', '47', '48', '50'];
 
-// 모든 지역 목록을 미리 받아 둬서 단지 검색과 대기현황 탐색이 바로 뜨게 한다. 마이홈 API에 몰리지 않게 지역을 하나씩 받는다.
+// 모든 지역 목록을 미리 받아 둬서 단지 검색과 대기현황 탐색이 바로 뜨게 한다.
+// 아직 신선한 지역은 건너뛰고, 마이홈 API에 몰리지 않게 지역을 하나씩 받는다.
 export async function warmAllWaitingRows() {
   for (const brtcCode of BRTC_CODES) {
-    await refreshAllWaitingRows(brtcCode).catch(() => undefined);
+    const cached = allRowsCache.get(brtcCode);
+    if (cached && Date.now() - cached.fetchedAt < allRowsCacheTtlMs) continue;
+    try {
+      await refreshAllWaitingRows(brtcCode);
+    } catch {
+      // 하루 한도를 넘겼으면 나머지 지역도 실패하니 다음 주기에 다시 시도한다.
+      return;
+    }
   }
 }
 
