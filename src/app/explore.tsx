@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { loadAppData, type HousingApplication } from '@/data/storage';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { NoticeAlertsSection } from '@/components/notice-alerts';
 
 export default function ApplicationsScreen() {
   const [items, setItems] = useState<HousingApplication[]>([]);
@@ -56,6 +57,7 @@ export default function ApplicationsScreen() {
           <Pressable style={[styles.filter, showChangedOnly && styles.filterActive]} onPress={() => setShowChangedOnly((value) => !value)}><Text style={styles.filterText}>{showChangedOnly ? `변동 있는 신청 ${visibleItems.length}건` : `전체 신청 ${items.length}건`}</Text><Text style={styles.chevron}>{showChangedOnly ? '×' : '⌄'}</Text></Pressable>
           {visibleItems.length === 0 ? <View style={styles.emptyCard}><Text style={styles.emptyIcon}>✓</Text><Text style={styles.emptyTitle}>{showChangedOnly ? '변동된 신청이 없어요' : '아직 신청 내역이 없어요'}</Text><Text style={styles.emptyText}>{showChangedOnly ? '모든 신청 내역이 이전 확인과 동일해요.' : '홈에서 신청 내역을 추가하면 이곳에서 관리할 수 있어요.'}</Text></View> : visibleItems.map((item) => <Pressable key={item.id} style={({ pressed }) => [styles.card, pressed && styles.cardPressed]} onPress={() => setSelectedItem(item)}><View style={[styles.icon, { backgroundColor: item.color }]}><Text style={styles.iconText}>{item.initials}</Text></View><View style={styles.cardBody}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.cardMeta}>{item.type}</Text><Text style={styles.cardMeta}>{item.area}</Text><View style={styles.bottom}><Text style={styles.rank}>{item.rank}번</Text><Text style={item.rank < item.previousRank ? styles.up : styles.same}>{item.rank < item.previousRank ? `↓ ${item.previousRank - item.rank}계단` : '변동 없음'}</Text><Text style={styles.updated}>{item.updatedAt}</Text></View></View><Text style={styles.arrow}>›</Text></Pressable>)}
           <Pressable style={({ pressed }) => [styles.tip, pressed && styles.cardPressed]} onPress={() => router.replace('/')}><Text style={styles.tipIcon}>✦</Text><View><Text style={styles.tipTitle}>신청 내역을 관리하려면</Text><Text style={styles.tipText}>홈으로 이동해 신청 내역을 추가하거나 수정할 수 있어요.</Text></View><Text style={styles.tipArrow}>›</Text></Pressable>
+          <NoticeAlertsSection />
         </ScrollView>
       </SafeAreaView>
       {selectedItem && <Modal visible transparent animationType="slide" onRequestClose={() => setSelectedItem(undefined)}>

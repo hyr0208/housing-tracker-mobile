@@ -6,6 +6,7 @@ import { fetchWaitingRows, findMatchingRows, searchComplexRows } from './myhome-
 import { fetchVacancyStatus } from './lh-vacancy-api.mjs';
 import { createSessionToken, exchangeAuthorizationCode, revokeAppleToken, verifyAppleIdentityToken, verifySessionToken } from './apple-auth.mjs';
 import { verifyReviewAccount } from './review-auth.mjs';
+import { fetchNotices, matchesNoticeAlert } from './notice-api.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const stateDir = path.join(__dirname, 'data');
@@ -233,7 +234,39 @@ async function syncAll() {
       results.push({ id: application.id, type: 'vacancy', status: 'error', message: error instanceof Error ? error.message : '공가현황 확인 오류' });
     }
   }
+  try {
+    results.push(await syncNotices());
+  } catch (error) {
+    results.push({ type: 'notices', status: 'error', message: error instanceof Error ? error.message : '모집공고 확인 오류' });
+  }
   return results;
+}
+
+// 새로 올라온 모집공고를 찾아, 관심 지역·공급유형을 등록한 기기에 알린다.
+// 처음 실행할 때는 이미 올라와 있던 공고를 모두 본 것으로 기록만 하고 알리지 않는다.
+async function syncNotices() {
+  const notices = await fetchNotices({ force: true });
+  const state = await readState();
+  const isFirstRun = !Array.isArray(state.seenNoticeIds);
+  const seen = new Set(state.seenNoticeIds ?? []);
+  const fresh = isFirstRun ? [] : notices.filter((notice) => !seen.has(notice.id));
+  let sent = 0;
+  for (const [pushToken, alert] of Object.entries(state.noticeAlerts ?? {})) {
+    const matched = fresh.filter((notice) => matchesNoticeAlert(notice, alert));
+    if (matched.length === 0) continue;
+    const [first] = matched;
+    const where = [first.region, first.districts[0]].filter(Boolean).join(' ');
+    const title = matched.length > 1 ? `새 모집공고 ${matched.length}건` : `새 모집공고 · ${first.supplyType}`;
+    const period = first.applyBegin ? ` · 접수 ${first.applyBegin.slice(5).replace('-', '.')}~${first.applyEnd.slice(5).replace('-', '.')}` : '';
+    const body = matched.length > 1 ? `${first.title} 외 ${matched.length - 1}건이 올라왔어요.` : `${first.title} (${where}${period})`;
+    if (await sendExpoPush(pushToken, title, body)) sent += 1;
+  }
+  // 목록에서 내려간 공고 ID가 끝없이 쌓이지 않도록 최근 것만 남긴다.
+  const nextSeen = [...new Set([...notices.map((notice) => notice.id), ...seen])].slice(0, 3000);
+  const latest = await readState();
+  latest.seenNoticeIds = nextSeen;
+  await writeState(latest);
+  return { type: 'notices', status: 'synced', total: notices.length, fresh: fresh.length, sent };
 }
 
 const server = http.createServer(async (request, response) => {
@@ -289,6 +322,31 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/notices') {
+      sendJson(response, 200, { notices: await fetchNotices() });
+      return;
+    }
+
+    // 새 공고 알림 조건은 로그인 없이도 쓸 수 있게 푸시 토큰 단위로 저장한다.
+    if (request.method === 'PUT' && url.pathname === '/api/notice-alerts') {
+      const { pushToken, enabled, regions, supplyTypes } = await readBody(request);
+      if (typeof pushToken !== 'string' || !pushToken.startsWith('ExponentPushToken')) {
+        sendJson(response, 400, { error: '알림을 받을 기기 정보가 없어요. 알림 권한을 확인해주세요.' });
+        return;
+      }
+      const state = await readState();
+      state.noticeAlerts = state.noticeAlerts ?? {};
+      const cleanList = (value) => (Array.isArray(value) ? value.filter((item) => typeof item === 'string').slice(0, 30) : []);
+      if (enabled && cleanList(regions).length > 0) {
+        state.noticeAlerts[pushToken] = { regions: cleanList(regions), supplyTypes: cleanList(supplyTypes), updatedAt: new Date().toISOString() };
+      } else {
+        delete state.noticeAlerts[pushToken];
+      }
+      await writeState(state);
+      sendJson(response, 200, { ok: true, enabled: Boolean(state.noticeAlerts[pushToken]) });
+      return;
+    }
+
     if ((request.method === 'GET' || request.method === 'PUT' || request.method === 'DELETE') && url.pathname === '/api/account') {
       const userId = await getUserId(request);
       if (!userId) {
@@ -303,6 +361,7 @@ const server = http.createServer(async (request, response) => {
       if (request.method === 'DELETE') {
         // 계정 데이터와 함께, 알림용으로 등록된 신청 정보(푸시 토큰 포함)도 지운다.
         const applicationIds = (accounts[userId]?.applications ?? []).map((application) => application.id).filter(Boolean);
+        const pushToken = accounts[userId]?.pushToken;
         delete accounts[userId];
         await writeAccounts(accounts);
         if (userId.startsWith('apple:')) {
@@ -311,9 +370,10 @@ const server = http.createServer(async (request, response) => {
           delete appleTokens[userId];
           await writeAppleTokens(appleTokens);
         }
-        if (applicationIds.length > 0) {
+        if (applicationIds.length > 0 || pushToken) {
           const state = await readState();
           for (const id of applicationIds) delete state.applications[id];
+          if (pushToken && state.noticeAlerts) delete state.noticeAlerts[pushToken];
           await writeState(state);
         }
         sendJson(response, 200, { ok: true, removedApplications: applicationIds.length });

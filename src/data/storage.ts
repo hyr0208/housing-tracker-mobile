@@ -77,6 +77,12 @@ export type UserProfile = {
   loggedInAt: string;
 };
 
+export type NoticeAlertSettings = {
+  enabled: boolean;
+  regions: string[];
+  supplyTypes: string[];
+};
+
 export type AppData = {
   applications: HousingApplication[];
   tasks: ChecklistTask[];
@@ -84,6 +90,7 @@ export type AppData = {
   pushToken?: string;
   profileName?: string;
   profile?: UserProfile;
+  noticeAlert?: NoticeAlertSettings;
 };
 
 const STORAGE_KEY = '@housing-tracker/app-data-v1';

@@ -23,7 +23,7 @@ function readDotEnv() {
   );
 }
 
-function getServiceKey() {
+export function getServiceKey() {
   const key = process.env.MYHOME_API_KEY || readDotEnv().MYHOME_API_KEY;
   if (!key) throw new Error('MYHOME_API_KEY가 설정되지 않았습니다.');
   return key;
