@@ -3,8 +3,10 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { loadAppData, type HousingApplication } from '@/data/storage';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useSheetBottomInset } from '@/hooks/use-sheet-bottom-inset';
 
 export default function ApplicationsScreen() {
+  const sheetInset = useSheetBottomInset();
   const [items, setItems] = useState<HousingApplication[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showChangedOnly, setShowChangedOnly] = useState(false);
@@ -60,7 +62,7 @@ export default function ApplicationsScreen() {
       </SafeAreaView>
       {selectedItem && <Modal visible transparent animationType="slide" onRequestClose={() => setSelectedItem(undefined)}>
         <View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setSelectedItem(undefined)} accessibilityLabel="닫기" />
-          <View style={styles.detailModal}>
+          <View style={[styles.detailModal, { paddingBottom: 34 + sheetInset }]}>
             <View style={styles.modalHeader}><View><Text style={styles.eyebrow}>APPLICATION DETAIL</Text><Text style={styles.modalTitle}>신청 내역 상세</Text></View><Pressable onPress={() => setSelectedItem(undefined)}><Text style={styles.closeText}>×</Text></Pressable></View>
             <View style={styles.detailHero}><View style={[styles.detailIcon, { backgroundColor: selectedItem.color }]}><Text style={styles.iconText}>{selectedItem.initials}</Text></View><View style={styles.detailHeroCopy}><Text style={styles.detailTitle}>{selectedItem.title}</Text><Text style={styles.detailMeta}>{selectedItem.type} · {selectedItem.area}</Text></View></View>
             <View style={styles.detailRank}><View><Text style={styles.detailLabel}>현재 예비순번</Text><Text style={styles.detailRankNumber}>{selectedItem.rank}번</Text></View><Text style={selectedItem.rank < selectedItem.previousRank ? styles.up : styles.same}>{selectedItem.rank < selectedItem.previousRank ? `↓ ${selectedItem.previousRank - selectedItem.rank}계단` : '변동 없음'}</Text></View>

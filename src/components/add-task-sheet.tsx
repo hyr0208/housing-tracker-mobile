@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSheetBottomInset } from '@/hooks/use-sheet-bottom-inset';
 
 type Props = {
   visible: boolean;
@@ -9,6 +10,7 @@ type Props = {
 
 // 홈과 체크리스트 탭에서 함께 쓰는 '준비할 일 추가' 바텀시트.
 export function AddTaskSheet({ visible, onClose, onAdd }: Props) {
+  const sheetInset = useSheetBottomInset();
   const [draftTitle, setDraftTitle] = useState('');
   const [draftDetail, setDraftDetail] = useState('');
 
@@ -22,7 +24,7 @@ export function AddTaskSheet({ visible, onClose, onAdd }: Props) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="닫기" /><View style={styles.modalCard}><View style={styles.modalHeader}><View><Text style={styles.eyebrow}>NEW CHECKLIST ITEM</Text><Text style={styles.modalTitle}>준비할 일 추가</Text></View><Pressable onPress={onClose}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>입주 준비에 필요한 일을 직접 기록해두세요.</Text><Text style={styles.inputLabel}>할 일</Text><TextInput value={draftTitle} onChangeText={setDraftTitle} placeholder="예: 주민등록 이전 준비" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Text style={styles.inputLabel}>메모 (선택)</Text><TextInput value={draftDetail} onChangeText={setDraftDetail} placeholder="예: 필요한 서류를 확인해요" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={submit}><Text style={styles.saveButtonText}>체크리스트에 추가하기  →</Text></Pressable></View></KeyboardAvoidingView>
+      <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="닫기" /><View style={[styles.modalCard, { paddingBottom: 34 + sheetInset }]}><View style={styles.modalHeader}><View><Text style={styles.eyebrow}>NEW CHECKLIST ITEM</Text><Text style={styles.modalTitle}>준비할 일 추가</Text></View><Pressable onPress={onClose}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>입주 준비에 필요한 일을 직접 기록해두세요.</Text><Text style={styles.inputLabel}>할 일</Text><TextInput value={draftTitle} onChangeText={setDraftTitle} placeholder="예: 주민등록 이전 준비" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Text style={styles.inputLabel}>메모 (선택)</Text><TextInput value={draftDetail} onChangeText={setDraftDetail} placeholder="예: 필요한 서류를 확인해요" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={submit}><Text style={styles.saveButtonText}>체크리스트에 추가하기  →</Text></Pressable></View></KeyboardAvoidingView>
     </Modal>
   );
 }

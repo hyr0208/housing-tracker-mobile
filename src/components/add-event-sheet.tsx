@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, T
 import type { ScheduleKind } from '@/data/storage';
 import { MonthCalendar } from '@/components/month-calendar';
 import { SCHEDULE_KINDS } from '@/services/schedule';
+import { useSheetBottomInset } from '@/hooks/use-sheet-bottom-inset';
 
 type Props = {
   visible: boolean;
@@ -12,6 +13,7 @@ type Props = {
 
 // 서류 마감·계약일 같은 일정을 추가하는 바텀시트. 하루 전 오전 9시와 당일 오전 9시에 알려준다.
 export function AddEventSheet({ visible, onClose, onAdd }: Props) {
+  const sheetInset = useSheetBottomInset();
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState<ScheduleKind>('document');
   const [date, setDate] = useState<string>();
@@ -36,7 +38,7 @@ export function AddEventSheet({ visible, onClose, onAdd }: Props) {
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="닫기" />
-        <View style={styles.modalCard}>
+        <View style={[styles.modalCard, { paddingBottom: 34 + sheetInset }]}>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <View style={styles.modalHeader}><View><Text style={styles.eyebrow}>NEW SCHEDULE</Text><Text style={styles.modalTitle}>일정 추가</Text></View><Pressable onPress={onClose}><Text style={styles.closeText}>×</Text></Pressable></View>
             <Text style={styles.modalCopy}>하루 전과 당일 오전 9시에 알림을 보내드려요.</Text>

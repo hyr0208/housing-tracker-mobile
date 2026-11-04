@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, T
 import type { RankSnapshot } from '@/data/storage';
 import { MonthCalendar } from '@/components/month-calendar';
 import { toDateKey } from '@/services/schedule';
+import { useSheetBottomInset } from '@/hooks/use-sheet-bottom-inset';
 
 type Props = {
   visible: boolean;
@@ -18,6 +19,7 @@ function formatDate(recordedAt: string) {
 
 // 앱을 쓰기 전에 확인했던 예비순번을 날짜와 함께 넣어, 순번 그래프가 처음부터 이어지게 한다.
 export function RankHistorySheet({ visible, history, onClose, onSave }: Props) {
+  const sheetInset = useSheetBottomInset();
   const [date, setDate] = useState<string>();
   const [rank, setRank] = useState('');
   const [error, setError] = useState<string>();
@@ -56,7 +58,7 @@ export function RankHistorySheet({ visible, history, onClose, onSave }: Props) {
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior="padding" style={styles.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="닫기" />
-        <View style={styles.card}>
+        <View style={[styles.card, { paddingBottom: 34 + sheetInset }]}>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <View style={styles.header}><View><Text style={styles.eyebrow}>RANK HISTORY</Text><Text style={styles.title}>지난 순번 기록</Text></View><Pressable onPress={onClose}><Text style={styles.close}>×</Text></Pressable></View>
             <Text style={styles.copy}>앱을 쓰기 전에 확인했던 예비순번을 날짜와 함께 넣으면, 순번 그래프에 처음부터의 흐름이 보여요.</Text>
