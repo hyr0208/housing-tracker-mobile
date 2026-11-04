@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { loadAppData, saveAppData, subscribeToAppData, type NoticeAlertSettings, type ScheduleEvent } from '@/data/storage';
-import { fetchNotices, matchesNoticeSettings, NOTICE_REGIONS, NOTICE_SUPPLY_TYPES, saveNoticeAlert, type HousingNotice } from '@/services/notices';
+import { applyPhaseOf, fetchNotices, matchesNoticeSettings, NOTICE_REGIONS, NOTICE_SORTS, NOTICE_SUPPLY_TYPES, saveNoticeAlert, sortNotices, type HousingNotice, type NoticeSort } from '@/services/notices';
+import { toDateKey } from '@/services/schedule';
 
 const defaultSettings: NoticeAlertSettings = { enabled: false, regions: [], supplyTypes: [] };
 const VISIBLE_COUNT = 8;
@@ -19,6 +20,8 @@ export function NoticeAlertsSection() {
   const [errorMessage, setErrorMessage] = useState<string>();
   const [statusMessage, setStatusMessage] = useState<string>();
   const [showAll, setShowAll] = useState(false);
+  const [sort, setSort] = useState<NoticeSort>('latest');
+  const [hideClosed, setHideClosed] = useState(true);
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
 
   const loadNotices = useCallback(() => {
@@ -84,7 +87,12 @@ export function NoticeAlertsSection() {
     void persist({ ...settings, enabled: !settings.enabled });
   };
 
-  const matched = useMemo(() => notices.filter((notice) => matchesNoticeSettings(notice, settings)), [notices, settings]);
+  const today = toDateKey(new Date());
+  const matched = useMemo(() => sortNotices(
+    notices.filter((notice) => matchesNoticeSettings(notice, settings) && (!hideClosed || applyPhaseOf(notice, today).phase !== 'closed')),
+    sort,
+    today,
+  ), [notices, settings, sort, hideClosed, today]);
   const visible = showAll ? matched : matched.slice(0, VISIBLE_COUNT);
 
   return (
@@ -111,6 +119,10 @@ export function NoticeAlertsSection() {
         <Text style={styles.groupLabel}>{settings.regions.length || settings.supplyTypes.length ? `조건에 맞는 공고 ${matched.length}건` : `진행 중인 전국 공고 ${matched.length}건`}</Text>
         <Pressable onPress={loadNotices} disabled={isLoading}><Text style={styles.refresh}>{isLoading ? '불러오는 중…' : '새로고침'}</Text></Pressable>
       </View>
+      <View style={styles.sortRow}>
+        {NOTICE_SORTS.map((item) => <Pressable key={item.key} style={[styles.sortChip, sort === item.key && styles.sortChipOn]} onPress={() => { setSort(item.key); setShowAll(false); }}><Text style={[styles.sortText, sort === item.key && styles.sortTextOn]}>{item.label}</Text></Pressable>)}
+        <Pressable style={[styles.sortChip, hideClosed && styles.sortChipOn]} onPress={() => setHideClosed((value) => !value)} accessibilityRole="checkbox" accessibilityState={{ checked: hideClosed }}><Text style={[styles.sortText, hideClosed && styles.sortTextOn]}>{hideClosed ? '✓ ' : ''}마감 숨기기</Text></Pressable>
+      </View>
       {isLoading && notices.length === 0 ? <ActivityIndicator color="#327e67" style={styles.loading} />
         : errorMessage ? <Text style={styles.empty}>{errorMessage}</Text>
         : matched.length === 0 ? <Text style={styles.empty}>지금은 조건에 맞는 공고가 없어요. 새로 올라오면 알려드릴게요.</Text>
@@ -118,6 +130,10 @@ export function NoticeAlertsSection() {
           <View style={styles.noticeTags}>
             <Text style={styles.noticeTag}>{notice.supplyType}</Text>
             <Text style={styles.noticeRegion}>{[notice.region, notice.districts[0]].filter(Boolean).join(' ')}{notice.districts.length > 1 ? ` 외 ${notice.districts.length - 1}곳` : ''}</Text>
+            {(() => {
+              const phase = applyPhaseOf(notice, today);
+              return phase.label ? <Text style={[styles.phase, phase.phase === 'open' && styles.phaseOpen, phase.phase === 'closed' && styles.phaseClosed]}>{phase.label}</Text> : null;
+            })()}
           </View>
           <Text style={styles.noticeTitle} numberOfLines={2}>{notice.title}</Text>
           <Text style={styles.noticeMeta}>{notice.institution} · 공고 {formatShortDay(notice.announcedAt)}{notice.applyBegin ? ` · 접수 ${formatShortDay(notice.applyBegin)}~${formatShortDay(notice.applyEnd)}` : ''}  ↗</Text>
@@ -157,6 +173,14 @@ const styles = StyleSheet.create({
   noticeTags: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   noticeTag: { color: '#2f7d64', backgroundColor: '#e4f3ec', overflow: 'hidden', borderRadius: 5, paddingHorizontal: 6, paddingVertical: 3, fontSize: 12, fontWeight: '800' },
   noticeRegion: { color: '#72a391', fontSize: 12, fontWeight: '700', flexShrink: 1 },
+  phase: { marginLeft: 'auto', color: '#6b8c7d', fontSize: 12, fontWeight: '800' },
+  phaseOpen: { color: '#d06f55' },
+  phaseClosed: { color: '#a9b4ae' },
+  sortRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  sortChip: { borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#eef4f0' },
+  sortChipOn: { backgroundColor: '#327e67' },
+  sortText: { color: '#6b8c7d', fontSize: 12, fontWeight: '800' },
+  sortTextOn: { color: '#fff' },
   noticeTitle: { color: '#243b34', fontSize: 15, fontWeight: '800', marginTop: 8, lineHeight: 21 },
   noticeMeta: { color: '#9aa9a1', fontSize: 12, marginTop: 6 },
   scheduleButton: { alignSelf: 'flex-start', marginTop: 10, borderRadius: 7, borderWidth: 1, borderColor: '#cfe3d9', paddingHorizontal: 9, paddingVertical: 6 },
