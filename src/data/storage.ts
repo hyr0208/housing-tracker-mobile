@@ -77,6 +77,19 @@ export type UserProfile = {
   loggedInAt: string;
 };
 
+export type ScheduleKind = 'apply' | 'document' | 'contract' | 'move' | 'other';
+
+export type ScheduleEvent = {
+  id: string;
+  title: string;
+  kind: ScheduleKind;
+  // YYYY-MM-DD. 접수 기간처럼 기간이 있으면 endDate까지.
+  date: string;
+  endDate?: string;
+  noticeId?: string;
+  url?: string;
+};
+
 export type NoticeAlertSettings = {
   enabled: boolean;
   regions: string[];
@@ -91,6 +104,7 @@ export type AppData = {
   profileName?: string;
   profile?: UserProfile;
   noticeAlert?: NoticeAlertSettings;
+  events?: ScheduleEvent[];
 };
 
 const STORAGE_KEY = '@housing-tracker/app-data-v1';
@@ -132,6 +146,8 @@ export async function loadAppData(): Promise<AppData> {
       pushToken: parsed.pushToken,
       profileName: parsed.profileName,
       profile: parsed.profile,
+      noticeAlert: parsed.noticeAlert,
+      events: parsed.events ?? [],
     };
   } catch {
     return defaultAppData;

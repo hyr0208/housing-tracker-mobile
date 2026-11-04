@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { loadAppData, saveAppData, type NoticeAlertSettings } from '@/data/storage';
+import { loadAppData, saveAppData, subscribeToAppData, type NoticeAlertSettings, type ScheduleEvent } from '@/data/storage';
 import { fetchNotices, matchesNoticeSettings, NOTICE_REGIONS, NOTICE_SUPPLY_TYPES, saveNoticeAlert, type HousingNotice } from '@/services/notices';
 
 const defaultSettings: NoticeAlertSettings = { enabled: false, regions: [], supplyTypes: [] };
@@ -19,6 +19,7 @@ export function NoticeAlertsSection() {
   const [errorMessage, setErrorMessage] = useState<string>();
   const [statusMessage, setStatusMessage] = useState<string>();
   const [showAll, setShowAll] = useState(false);
+  const [events, setEvents] = useState<ScheduleEvent[]>([]);
 
   const loadNotices = useCallback(() => {
     setIsLoading(true);
@@ -33,9 +34,23 @@ export function NoticeAlertsSection() {
     loadAppData().then((data) => {
       setSettings(data.noticeAlert ?? defaultSettings);
       setPushToken(data.pushToken);
+      setEvents(data.events ?? []);
     });
     loadNotices();
+    return subscribeToAppData((data) => setEvents(data.events ?? []));
   }, [loadNotices]);
+
+  // 공고의 접수 기간을 홈의 '다가오는 일정'에 넣거나 뺀다. 알림 예약은 홈 화면이 일정 목록을 보고 처리한다.
+  const toggleApplyEvent = async (notice: HousingNotice) => {
+    const data = await loadAppData();
+    const current = data.events ?? [];
+    const exists = current.some((event) => event.noticeId === notice.id);
+    const nextEvents = exists
+      ? current.filter((event) => event.noticeId !== notice.id)
+      : [...current, { id: `event-${Date.now()}`, title: notice.title, kind: 'apply' as const, date: notice.applyBegin, endDate: notice.applyEnd || undefined, noticeId: notice.id, url: notice.url }];
+    setEvents(nextEvents);
+    await saveAppData({ ...data, events: nextEvents });
+  };
 
   const persist = async (next: NoticeAlertSettings) => {
     setSettings(next);
@@ -106,6 +121,9 @@ export function NoticeAlertsSection() {
           </View>
           <Text style={styles.noticeTitle} numberOfLines={2}>{notice.title}</Text>
           <Text style={styles.noticeMeta}>{notice.institution} · 공고 {formatShortDay(notice.announcedAt)}{notice.applyBegin ? ` · 접수 ${formatShortDay(notice.applyBegin)}~${formatShortDay(notice.applyEnd)}` : ''}  ↗</Text>
+          {notice.applyBegin && <Pressable style={[styles.scheduleButton, events.some((event) => event.noticeId === notice.id) && styles.scheduleButtonOn]} onPress={() => void toggleApplyEvent(notice)} hitSlop={6}>
+            <Text style={[styles.scheduleText, events.some((event) => event.noticeId === notice.id) && styles.scheduleTextOn]}>{events.some((event) => event.noticeId === notice.id) ? '✓ 접수일 알림 설정됨' : '＋ 접수일 알림 받기'}</Text>
+          </Pressable>}
         </Pressable>)}
       {!showAll && matched.length > VISIBLE_COUNT && <Pressable style={styles.more} onPress={() => setShowAll(true)}><Text style={styles.moreText}>{matched.length - VISIBLE_COUNT}건 더 보기</Text></Pressable>}
       <Text style={styles.source}>마이홈포털 공공임대 모집공고 기준이에요. 자세한 자격과 일정은 공고문에서 꼭 확인해 주세요.</Text>
@@ -141,6 +159,10 @@ const styles = StyleSheet.create({
   noticeRegion: { color: '#72a391', fontSize: 10, fontWeight: '700', flexShrink: 1 },
   noticeTitle: { color: '#243b34', fontSize: 13, fontWeight: '800', marginTop: 8, lineHeight: 18 },
   noticeMeta: { color: '#9aa9a1', fontSize: 10, marginTop: 6 },
+  scheduleButton: { alignSelf: 'flex-start', marginTop: 10, borderRadius: 7, borderWidth: 1, borderColor: '#cfe3d9', paddingHorizontal: 9, paddingVertical: 6 },
+  scheduleButtonOn: { backgroundColor: '#e4f3ec', borderColor: '#e4f3ec' },
+  scheduleText: { color: '#38856d', fontSize: 10, fontWeight: '800' },
+  scheduleTextOn: { color: '#2f7d64' },
   more: { alignItems: 'center', paddingVertical: 12 },
   moreText: { color: '#38856d', fontSize: 11, fontWeight: '800' },
   source: { color: '#a9b4ae', fontSize: 9, marginTop: 10, lineHeight: 14 },

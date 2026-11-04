@@ -27,6 +27,8 @@ import {
   type UserProfile,
 } from '@/data/storage';
 import { AddTaskSheet } from '@/components/add-task-sheet';
+import { AddEventSheet } from '@/components/add-event-sheet';
+import { formatDday, formatEventDate, kindLabel, syncScheduleReminders, upcomingEvents } from '@/services/schedule';
 import { TrendChart } from '@/components/trend-chart';
 import { syncPublicWait } from '@/services/public-sync';
 import { estimateWait, formatWaitEstimate, shortWaitEstimate } from '@/services/wait-estimate';
@@ -146,6 +148,7 @@ export default function HomeScreen() {
   const [editingApplicationId, setEditingApplicationId] = useState<string | undefined>();
   const [isRankOpen, setIsRankOpen] = useState(false);
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
+  const [isAddEventOpen, setIsAddEventOpen] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -190,6 +193,7 @@ export default function HomeScreen() {
   const waitEstimate = selected ? estimateWait(selected.publicWaitHistory, estimatedRank ?? selected.rank) : undefined;
   const waitEstimateShort = waitEstimate ? shortWaitEstimate(waitEstimate) : undefined;
   const publicMaxWait = Math.max(1, ...(selected?.publicWaitBreakdown?.map((item) => item.count) ?? []));
+  const upcoming = upcomingEvents(data.events);
   const vacancyTotalCount = selected?.vacancyBreakdown?.reduce((total, item) => total + item.count, 0) ?? 0;
 
   const showDialog = (title: string, message: string, options: Omit<DialogState, 'title' | 'message'> = {}) => {
@@ -220,6 +224,13 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => subscribeToAppData(setData), []);
+
+  // 일정이 바뀌거나(다른 기기에서 동기화된 경우 포함) 앱을 열 때마다 이 기기의 일정 알림을 다시 예약한다.
+  const eventsKey = JSON.stringify(data.events ?? []);
+  useEffect(() => {
+    if (!isReady) return;
+    void syncScheduleReminders(JSON.parse(eventsKey)).catch(() => undefined);
+  }, [isReady, eventsKey]);
 
   // 서버가 보낸 푸시(대기·공가 변동)는 앱 밖에서 도착하므로, 받거나 알림 트레이에 남아 있는 것을 알림 센터에 옮겨 담는다.
   useEffect(() => {
@@ -532,6 +543,18 @@ export default function HomeScreen() {
     setSearchFeedback('공식 정보가 선택됐어요. 주택형을 골라주세요.');
   };
 
+  const deleteEvent = (eventId: string) => {
+    const event = data.events?.find((item) => item.id === eventId);
+    if (!event) return;
+    showDialog('일정 삭제', `${event.title} 일정을 삭제할까요?`, {
+      tone: 'error',
+      cancelLabel: '취소',
+      confirmLabel: '삭제',
+      destructive: true,
+      onConfirm: () => updateData({ ...data, events: (data.events ?? []).filter((item) => item.id !== eventId) }),
+    });
+  };
+
   const deleteApplication = (applicationId: string) => {
     const application = applications.find((item) => item.id === applicationId);
     if (!application) return;
@@ -711,6 +734,9 @@ export default function HomeScreen() {
             {applications.map((item) => <Pressable key={item.id} onPress={() => setSelectedId(item.id)} onLongPress={() => deleteApplication(item.id)} accessibilityHint="길게 누르면 삭제할 수 있어요" style={[styles.applicationCard, selectedId === item.id && styles.applicationSelected]}><View style={styles.applicationCardHeader}><View style={[styles.appIcon, { backgroundColor: item.color }]}><Text style={styles.appInitials}>{item.initials}</Text></View><Pressable style={styles.editApplicationButton} onPress={() => openEditApplication(item)}><Text style={styles.editApplicationText}>수정</Text></Pressable></View><Text style={styles.appTitle} numberOfLines={1}>{item.title}</Text><Text style={styles.appMeta}>{item.type}</Text><View style={styles.appRankLine}><Text style={styles.appRank}>{item.rank}<Text style={styles.appRankUnit}>번</Text></Text>{item.rank !== item.previousRank ? <Text style={styles.upTag}>↓ {item.previousRank - item.rank}</Text> : <Text style={styles.sameTag}>변동 없음</Text>}</View><Text style={styles.appUpdated}>{item.updatedAt}</Text></Pressable>)}
           </ScrollView>
 
+          <View style={styles.lowerHeader}><View><Text style={styles.cardEyebrow}>SCHEDULE</Text><Text style={styles.sectionTitle}>다가오는 일정 <Text style={styles.taskCount}>{upcoming.length}</Text></Text></View><Pressable onPress={() => setIsAddEventOpen(true)}><Text style={styles.moreText}>일정 추가  ＋</Text></Pressable></View>
+          <View style={styles.taskCard}>{upcoming.length === 0 ? <Pressable style={styles.eventEmpty} onPress={() => setIsAddEventOpen(true)}><Text style={styles.eventEmptyText}>서류 마감일이나 계약일을 추가하면 하루 전에 알려드려요. 공고 탭에서 접수일을 바로 추가할 수도 있어요.</Text></Pressable> : upcoming.slice(0, 4).map((event, index) => <Pressable key={event.id} onLongPress={() => deleteEvent(event.id)} onPress={() => { if (event.url) void Linking.openURL(event.url); }} style={[styles.eventRow, index === Math.min(upcoming.length, 4) - 1 && styles.eventRowLast]} accessibilityHint="길게 누르면 삭제할 수 있어요"><View style={styles.eventDday}><Text style={styles.eventDdayText}>{formatDday(event)}</Text></View><View style={styles.taskText}><Text style={styles.taskTitle} numberOfLines={1}>{event.title}</Text><Text style={styles.eventMeta}>{kindLabel(event.kind)} · {formatEventDate(event)}{event.url ? '  ↗' : ''}</Text></View></Pressable>)}{upcoming.length > 4 && <Text style={styles.eventMore}>외 {upcoming.length - 4}개 일정</Text>}</View>
+
           <View style={styles.lowerHeader}><View><Text style={styles.cardEyebrow}>NEXT STEPS</Text><Text style={styles.sectionTitle}>준비할 일 <Text style={styles.taskCount}>{completed}/{tasks.length}</Text></Text></View><Pressable onPress={() => setIsAddTaskOpen(true)}><Text style={styles.moreText}>할 일 추가  ＋</Text></Pressable></View>
           <View style={styles.taskCard}>{tasks.map((task) => <Pressable key={task.id} onPress={() => toggleTask(task.id)} style={styles.taskRow}><View style={[styles.checkbox, task.done && styles.checkboxDone]}>{task.done && <Text style={styles.checkMark}>✓</Text>}</View><View style={styles.taskText}><Text style={[styles.taskTitle, task.done && styles.taskDone]}>{task.title}</Text><Text style={styles.taskDetail}>{task.detail}</Text></View></Pressable>)}</View>
 
@@ -840,6 +866,11 @@ export default function HomeScreen() {
       <AddTaskSheet visible={isAddTaskOpen} onClose={() => setIsAddTaskOpen(false)} onAdd={(title, detail) => {
         updateData({ ...data, tasks: [...tasks, { id: `task-${Date.now()}`, title, detail: detail || '직접 추가한 준비 항목', done: false }] });
         setIsAddTaskOpen(false);
+      }} />
+
+      <AddEventSheet visible={isAddEventOpen} onClose={() => setIsAddEventOpen(false)} onAdd={(title, kind, date) => {
+        updateData({ ...data, events: [...(data.events ?? []), { id: `event-${Date.now()}`, title, kind, date }] });
+        setIsAddEventOpen(false);
       }} />
 
       <Modal visible={isNotificationOpen} transparent animationType="slide" onRequestClose={() => setIsNotificationOpen(false)}>
@@ -986,6 +1017,14 @@ const styles = StyleSheet.create({
   lowerHeader: { marginTop: 9, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
   taskCount: { color: '#6aa68e', fontSize: 11, fontWeight: '500', marginLeft: 4 },
   moreText: { color: '#6a9b87', fontSize: 10, fontWeight: '800', paddingBottom: 3 },
+  eventRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#edf1ee' },
+  eventRowLast: { borderBottomWidth: 0 },
+  eventDday: { minWidth: 52, alignItems: 'center', borderRadius: 8, backgroundColor: '#e4f3ec', paddingVertical: 6, paddingHorizontal: 6 },
+  eventDdayText: { color: '#2f7d64', fontSize: 11, fontWeight: '800' },
+  eventMeta: { color: '#9aa9a1', fontSize: 10, marginTop: 3 },
+  eventMore: { color: '#9aa9a1', fontSize: 10, textAlign: 'center', paddingBottom: 12 },
+  eventEmpty: { paddingVertical: 16 },
+  eventEmptyText: { color: '#8f9e96', fontSize: 11, lineHeight: 17 },
   taskCard: { marginHorizontal: 16, marginTop: 15, borderRadius: 17, backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.line, paddingHorizontal: 16 },
   taskRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1, borderBottomColor: '#eff3f0' },
   checkbox: { width: 18, height: 18, borderRadius: 6, borderWidth: 1, borderColor: '#cbd9d0', alignItems: 'center', justifyContent: 'center' },
