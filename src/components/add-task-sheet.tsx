@@ -28,15 +28,15 @@ export function AddTaskSheet({ visible, onClose, onAdd }: Props) {
 }
 
 const styles = StyleSheet.create({
-  eyebrow: { color: '#65786e', fontSize: 12, fontWeight: '800', letterSpacing: 1.2 },
+  eyebrow: { color: '#9aa9a1', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(33, 55, 46, 0.28)', justifyContent: 'flex-end' },
   modalCard: { backgroundColor: '#fff', borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 24, paddingBottom: 34 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   modalTitle: { color: '#29483d', fontSize: 21, fontWeight: '800', marginTop: 7 },
-  closeText: { color: '#596861', fontSize: 28, lineHeight: 28 },
-  modalCopy: { color: '#5c6b63', fontSize: 14, lineHeight: 22, marginTop: 14, marginBottom: 12 },
-  inputLabel: { color: '#61736a', fontSize: 13, fontWeight: '800', marginTop: 13 },
-  input: { height: 44, backgroundColor: '#fbfcfb', borderWidth: 1, borderColor: '#e4ece7', borderRadius: 10, paddingHorizontal: 12, color: '#52635b', fontSize: 15, marginTop: 7 },
+  closeText: { color: '#8c9b94', fontSize: 28, lineHeight: 28 },
+  modalCopy: { color: '#8f9e96', fontSize: 13, lineHeight: 21, marginTop: 14, marginBottom: 12 },
+  inputLabel: { color: '#61736a', fontSize: 12, fontWeight: '800', marginTop: 13 },
+  input: { height: 44, backgroundColor: '#fbfcfb', borderWidth: 1, borderColor: '#e4ece7', borderRadius: 10, paddingHorizontal: 12, color: '#52635b', fontSize: 14, marginTop: 7 },
   saveButton: { height: 47, borderRadius: 11, backgroundColor: '#327e67', alignItems: 'center', justifyContent: 'center', marginTop: 22 },
-  saveButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  saveButtonText: { color: '#fff', fontSize: 14, fontWeight: '800' },
 });
