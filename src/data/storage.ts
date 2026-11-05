@@ -123,6 +123,32 @@ const STORAGE_KEY = '@housing-tracker/app-data-v1';
 const profileListeners = new Set<(profile?: UserProfile) => void>();
 const dataListeners = new Set<(data: AppData) => void>();
 let accountSaveQueue: Promise<void> = Promise.resolve();
+// 서버의 계정 데이터를 한 번이라도 받아 합친 뒤에만 이 기기 데이터를 서버에 올린다.
+// 받기 전에 올리면, 로그인 직후 토큰을 못 읽은 기기가 빈 데이터로 다른 기기의 내역을 덮어쓸 수 있다.
+let accountReady = false;
+
+export function markAccountReady() {
+  accountReady = true;
+}
+
+function mergeById<T extends { id: string }>(remote: T[] = [], local: T[] = []) {
+  const ids = new Set(remote.map((item) => item.id));
+  return [...remote, ...local.filter((item) => !ids.has(item.id))];
+}
+
+/** 서버 데이터를 기준으로, 이 기기에만 있는 신청·할 일·알림·일정을 더한다. */
+export function mergeAccountData(remote: AppData, local: AppData): AppData {
+  return {
+    ...local,
+    ...remote,
+    applications: mergeById(remote.applications, local.applications),
+    tasks: mergeById(remote.tasks, local.tasks),
+    notifications: mergeById(remote.notifications, local.notifications),
+    events: mergeById(remote.events, local.events),
+    noticeAlert: remote.noticeAlert ?? local.noticeAlert,
+    pushToken: local.pushToken ?? remote.pushToken,
+  };
+}
 
 export function subscribeToProfile(listener: (profile?: UserProfile) => void) {
   profileListeners.add(listener);
@@ -168,7 +194,8 @@ export async function loadAppData(): Promise<AppData> {
 
 export async function saveAppData(data: AppData) {
   await saveLocalAppData(data);
-  if (data.profile) {
+  if (!data.profile) accountReady = false;
+  if (data.profile && accountReady) {
     const profile = data.profile;
     accountSaveQueue = accountSaveQueue.catch(() => undefined).then(async () => {
       await storeAccountData(await getAccountToken(profile), data);

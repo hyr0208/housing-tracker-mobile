@@ -19,6 +19,8 @@ import {
   loadAppData,
   subscribeToAppData,
   makeNotification,
+  markAccountReady,
+  mergeAccountData,
   saveAppData,
   saveLocalAppData,
   type AppData,
@@ -214,9 +216,13 @@ export default function HomeScreen() {
         try {
           const token = await getAccountToken(localData.profile);
           const remoteData = await fetchAccountData(token);
+          markAccountReady();
           if (remoteData) {
-            stored = { ...remoteData, profile: localData.profile, profileName: remoteData.profileName || localData.profile.nickname };
-            await saveLocalAppData(stored);
+            const merged = mergeAccountData(remoteData, localData);
+            stored = { ...merged, profile: localData.profile, profileName: remoteData.profileName || localData.profile.nickname };
+            // 이 기기에만 있던 내역이 있으면 서버에도 올린다.
+            if (merged.applications.length > remoteData.applications.length || (merged.events?.length ?? 0) > (remoteData.events?.length ?? 0) || merged.tasks.length > remoteData.tasks.length) void saveAppData(stored);
+            else await saveLocalAppData(stored);
           } else {
             void saveAppData(localData);
           }
@@ -288,18 +294,25 @@ export default function HomeScreen() {
   // 로그인 후 서버에 저장된 계정 데이터가 있으면 불러오고, 없으면 지금 기기 데이터를 계정에 저장한다.
   const completeLogin = async (accountProfile: UserProfile) => {
     let accountData = data;
-    try {
-      const remoteData = await fetchAccountData(await getAccountToken(accountProfile));
-      if (remoteData) accountData = remoteData;
-    } catch {
-      // Save locally and retry account sync on the next data change.
+    let synced = false;
+    // 로그인 직후에는 SDK에 토큰이 늦게 저장되는 경우가 있어 한 번 더 시도한다.
+    for (let attempt = 0; attempt < 2 && !synced; attempt += 1) {
+      try {
+        if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 800));
+        const remoteData = await fetchAccountData(await getAccountToken(accountProfile));
+        if (remoteData) accountData = mergeAccountData(remoteData, data);
+        synced = true;
+        markAccountReady();
+      } catch {
+        // 서버 내용을 못 받았으면 이 기기 데이터만 쓰고, 서버에는 올리지 않는다(다음 실행 때 다시 합친다).
+      }
     }
     const nickname = accountData.profileName || accountProfile.nickname;
     const next = { ...accountData, profile: { ...accountProfile, nickname }, profileName: nickname };
     updateData(next);
     setSelectedId(next.applications[0]?.id);
     setDraftProfileName(nickname);
-    showDialog('로그인 완료', `${nickname}님, 환영해요.`, { tone: 'success' });
+    showDialog('로그인 완료', synced ? `${nickname}님, 환영해요.` : `${nickname}님, 환영해요. 계정에 저장된 내역은 잠시 후 앱을 다시 열면 불러올게요.`, { tone: 'success' });
   };
 
   const handleAppleLogin = async () => {
