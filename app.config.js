@@ -18,17 +18,8 @@ module.exports = ({ config }) => {
       {
         android: {
           extraMavenRepos: ['https://devrepo.kakao.com/nexus/content/groups/public/'],
-          // Play가 요구하는 코드 최적화(R8). 카카오 SDK는 응답 모델을 리플렉션으로 읽어서 난독화에서 제외한다.
-          enableMinifyInReleaseBuilds: true,
-          enableShrinkResourcesInReleaseBuilds: true,
-          extraProguardRules: [
-            '-keep class com.kakao.sdk.**.model.* { <fields>; }',
-            '-keep class * extends com.google.gson.TypeAdapter',
-            '-keep interface com.kakao.sdk.**.*Api',
-            '-dontwarn org.bouncycastle.jsse.**',
-            '-dontwarn org.conscrypt.*',
-            '-dontwarn org.openjsse.**',
-          ].join('\n'),
+          // R8(enableMinifyInReleaseBuilds)을 켜면 카카오 SDK의 Retrofit 호출이 깨져 로그인 중 앱이 종료된다(v9).
+          // 필요한 keep 규칙을 기기에서 검증하기 전까지는 끈다.
         },
       },
     ]);
