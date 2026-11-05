@@ -131,6 +131,10 @@ export function markAccountReady() {
   accountReady = true;
 }
 
+export function isAccountReady() {
+  return accountReady;
+}
+
 function mergeById<T extends { id: string }>(remote: T[] = [], local: T[] = []) {
   const ids = new Set(remote.map((item) => item.id));
   return [...remote, ...local.filter((item) => !ids.has(item.id))];
