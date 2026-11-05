@@ -1,13 +1,13 @@
 import type { UserProfile } from '@/data/storage';
 import { clearAppleSession, getAppleSessionToken } from '@/services/apple-auth';
-import { clearKakaoSession, getKakaoAccessToken, unlinkKakao } from '@/services/kakao-auth';
+import { clearKakaoSession, getKakaoSessionToken, unlinkKakao } from '@/services/kakao-auth';
 import { clearReviewSession, getReviewSessionToken } from '@/services/review-auth';
 
 // 로그인 방식(카카오/Apple/심사용)에 맞는 계정 동기화용 토큰을 가져온다.
 export function getAccountToken(profile: UserProfile): Promise<string> {
   if (profile.provider === 'apple') return getAppleSessionToken();
   if (profile.provider === 'review') return getReviewSessionToken();
-  return getKakaoAccessToken();
+  return getKakaoSessionToken();
 }
 
 export async function clearAccountSession(profile: UserProfile) {

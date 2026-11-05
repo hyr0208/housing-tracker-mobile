@@ -6,7 +6,7 @@ export async function fetchAccountData(accessToken: string): Promise<AppData | n
   const response = await fetch(`${syncServerUrl}/api/account`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!response.ok) throw new Error('계정 정보를 불러오지 못했어요.');
+  if (!response.ok) throw new Error(`계정 정보를 불러오지 못했어요. (${response.status})`);
   const result = await response.json() as { data: AppData | null };
   return result.data;
 }

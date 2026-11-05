@@ -77,7 +77,12 @@ async function getUserId(request) {
   const accessToken = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!accessToken) return null;
   if (accessToken.startsWith('hts.')) return verifySessionToken(stateDir, accessToken);
-  // 다른 카카오 앱에서 발급된 토큰으로 우리 계정 데이터에 접근하지 못하게, 토큰이 이 앱(KAKAO_APP_ID) 것인지 확인한다.
+  return kakaoUserIdFromToken(accessToken);
+}
+
+// 다른 카카오 앱에서 발급된 토큰으로 우리 계정 데이터에 접근하지 못하게, 토큰이 이 앱(KAKAO_APP_ID) 것인지 확인한다.
+async function kakaoUserIdFromToken(accessToken) {
+  if (!accessToken) return null;
   const response = await fetch('https://kapi.kakao.com/v1/user/access_token_info', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -321,6 +326,18 @@ const server = http.createServer(async (request, response) => {
         const appleTokens = await readAppleTokens();
         appleTokens[userId] = refreshToken;
         await writeAppleTokens(appleTokens);
+      }
+      sendJson(response, 200, { token: await createSessionToken(stateDir, userId), userId });
+      return;
+    }
+
+    // 카카오 SDK는 앱에서 최신 access token 문자열을 꺼내 주지 않아서, 로그인 직후 한 번 확인하고 서버 로그인 토큰으로 바꿔 준다.
+    if (request.method === 'POST' && url.pathname === '/api/auth/kakao') {
+      const { accessToken } = await readBody(request);
+      const userId = await kakaoUserIdFromToken(accessToken);
+      if (!userId) {
+        sendJson(response, 401, { error: '카카오 로그인 확인에 실패했어요. 다시 로그인해주세요.' });
+        return;
       }
       sendJson(response, 200, { token: await createSessionToken(stateDir, userId), userId });
       return;
