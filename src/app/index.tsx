@@ -796,7 +796,7 @@ export default function HomeScreen() {
       {selected && <Modal visible={statusSheet !== null} transparent animationType="slide" onRequestClose={() => setStatusSheet(null)}>
         <View style={styles.statusSheetBackdrop}>
           <Pressable style={styles.statusSheetDismissArea} onPress={() => setStatusSheet(null)} accessibilityLabel="닫기" />
-          <View style={[styles.statusSheet, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+          <View style={styles.statusSheet}>
             <View style={styles.sheetHandle} />
             <View style={styles.modalHeader}>
               <View>
@@ -806,7 +806,8 @@ export default function HomeScreen() {
               <Pressable onPress={() => setStatusSheet(null)} accessibilityLabel="닫기"><Text style={styles.closeText}>×</Text></Pressable>
             </View>
             <Text style={styles.sheetComplexName} numberOfLines={2}>{selected.complexName || selected.title}</Text>
-            <ScrollView style={styles.statusSheetScroll} contentContainerStyle={styles.statusSheetContent} showsVerticalScrollIndicator={false}>
+            {/* 내용은 시트 맨 아래까지 스크롤되게 두고, 끝까지 내렸을 때만 홈 인디케이터만큼 여백을 준다. */}
+            <ScrollView style={styles.statusSheetScroll} contentContainerStyle={{ paddingBottom: insets.bottom + 16 }} showsVerticalScrollIndicator={false}>
               {statusSheet === 'waiting' ? <>
                 <Text style={styles.sheetDescription}>{isSyncing ? '마이홈 공개 현황을 확인하고 있어요…' : selected.syncMessage || (selected.housingType && selected.publicWaitCount !== undefined ? `${selected.housingType}형 현재 대기인원 ${selected.publicWaitCount}명` : '주택형별로 공개된 대기인원을 확인해요.')}</Text>
                 <Pressable style={styles.sheetRefreshButton} onPress={() => void runPublicSync(selected, pushTokenRef.current, true)} disabled={isSyncing}><Text style={styles.sheetRefreshText}>{isSyncing ? '확인 중…' : '대기현황 지금 확인'}</Text></Pressable>
@@ -1098,8 +1099,7 @@ const styles = StyleSheet.create({
   statusSheet: { maxHeight: '82%', backgroundColor: '#fff', borderTopLeftRadius: 25, borderTopRightRadius: 25, paddingHorizontal: 22, paddingTop: 11 },
   sheetHandle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: '#d5dfd9', marginBottom: 15 },
   sheetComplexName: { color: '#7f9087', fontSize: 12, marginTop: 8 },
-  statusSheetScroll: { flexGrow: 0, maxHeight: 540, marginTop: 8 },
-  statusSheetContent: { paddingBottom: 10 },
+  statusSheetScroll: { flexGrow: 0, flexShrink: 1, marginTop: 8 },
   sheetDescription: { color: '#82968b', fontSize: 13, lineHeight: 20, marginTop: 8 },
   sheetRefreshButton: { minHeight: 43, borderRadius: 11, backgroundColor: '#e0f1e8', alignItems: 'center', justifyContent: 'center', marginTop: 14 },
   sheetRefreshText: { color: '#438d75', fontSize: 13, fontWeight: '800' },
