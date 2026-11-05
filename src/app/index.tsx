@@ -1094,7 +1094,7 @@ const styles = StyleSheet.create({
   chevronDown: { color: '#89a494', fontSize: 19 },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#203b3088' },
   statusSheetBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#203b3066' },
-  statusSheetDismissArea: { ...StyleSheet.absoluteFillObject },
+  statusSheetDismissArea: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   statusSheet: { maxHeight: '82%', backgroundColor: '#fff', borderTopLeftRadius: 25, borderTopRightRadius: 25, paddingHorizontal: 22, paddingTop: 11 },
   sheetHandle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: '#d5dfd9', marginBottom: 15 },
   sheetComplexName: { color: '#7f9087', fontSize: 12, marginTop: 8 },
