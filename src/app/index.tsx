@@ -61,6 +61,18 @@ Notifications.setNotificationHandler({
 
 const LH_APPLY_URL = 'https://apply.lh.or.kr';
 
+type PushTarget = { screen: 'notices' } | { screen: 'home'; sheet: 'waiting' | 'vacancy'; complexTitle: string } | { screen: 'home' };
+
+// 서버 푸시 제목으로 눌렀을 때 열 화면을 정한다. (서버가 따로 화면 정보를 보내지 않아서 제목 형식에 맞춘다.)
+function pushTargetOf(push: Notifications.Notification): PushTarget {
+  const data = push.request.content.data as { screen?: string } | undefined;
+  const title = push.request.content.title ?? '';
+  if (data?.screen === 'notices' || title.startsWith('새 모집공고')) return { screen: 'notices' };
+  if (title.endsWith('대기현황 변동')) return { screen: 'home', sheet: 'waiting', complexTitle: title.replace(/\s*대기현황 변동$/, '') };
+  if (title.endsWith('공가현황 변동')) return { screen: 'home', sheet: 'vacancy', complexTitle: title.replace(/\s*공가현황 변동$/, '') };
+  return { screen: 'home' };
+}
+
 function toPushNotification(push: Notifications.Notification): AppNotification {
   const receivedAt = new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(push.date));
   return {
@@ -151,6 +163,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const [data, setData] = useState<AppData>(defaultAppData);
   const [selectedId, setSelectedId] = useState<string | undefined>();
+  const handledPushRef = useRef<string | undefined>(undefined);
   const [isReady, setIsReady] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingApplicationId, setEditingApplicationId] = useState<string | undefined>();
@@ -192,6 +205,8 @@ export default function HomeScreen() {
   const pushTokenRef = useRef<string | undefined>(undefined);
   const kakaoNativeAppKey = process.env.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY || '';
   const applications = data.applications;
+  const applicationsRef = useRef(applications);
+  applicationsRef.current = applications;
   const tasks = data.tasks;
   const isLoggedIn = Boolean(data.profile);
   const selected = applications.find((item) => item.id === selectedId) ?? applications[0];
@@ -265,11 +280,37 @@ export default function HomeScreen() {
       });
     };
     const collectPresented = () => { Notifications.getPresentedNotificationsAsync().then(recordPushes).catch(() => undefined); };
+    // 알림을 눌러 들어오면 그 알림에 맞는 화면을 연다.
+    const openPush = (push: Notifications.Notification) => {
+      if (handledPushRef.current === push.request.identifier) return;
+      handledPushRef.current = push.request.identifier;
+      // 다음에 앱을 켤 때 같은 알림으로 다시 이동하지 않게 지운다.
+      Notifications.clearLastNotificationResponse();
+      const target = pushTargetOf(push);
+      if (target.screen === 'notices') {
+        router.navigate('/notices');
+        return;
+      }
+      if ('sheet' in target) {
+        const application = applicationsRef.current.find((item) => item.complexName && target.complexTitle.startsWith(item.complexName))
+          ?? applicationsRef.current.find((item) => target.complexTitle.startsWith(item.title));
+        if (application) {
+          setSelectedId(application.id);
+          setStatusSheet(target.sheet);
+        }
+      }
+    };
     const lastResponse = Notifications.getLastNotificationResponse();
-    if (lastResponse) recordPushes([lastResponse.notification]);
+    if (lastResponse) {
+      recordPushes([lastResponse.notification]);
+      openPush(lastResponse.notification);
+    }
     collectPresented();
     const received = Notifications.addNotificationReceivedListener((push) => recordPushes([push]));
-    const responded = Notifications.addNotificationResponseReceivedListener((response) => recordPushes([response.notification]));
+    const responded = Notifications.addNotificationResponseReceivedListener((response) => {
+      recordPushes([response.notification]);
+      openPush(response.notification);
+    });
     const appState = AppState.addEventListener('change', (state) => { if (state === 'active') collectPresented(); });
     return () => { received.remove(); responded.remove(); appState.remove(); };
   }, [isReady]);
