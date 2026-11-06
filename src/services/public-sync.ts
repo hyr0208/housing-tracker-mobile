@@ -6,6 +6,7 @@ export type PublicWaitSyncResult = {
   publicWaitCount?: number;
   previousWaitCount?: number;
   publicWaitBreakdown?: PublicWaitBreakdown[];
+  publicMoveOutCount?: number;
   publicWaitHistory?: WaitCountSnapshot[];
   matched?: {
     hsmpNm?: string;

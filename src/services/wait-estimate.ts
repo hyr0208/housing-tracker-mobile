@@ -3,7 +3,7 @@ import type { RankSnapshot, WaitCountSnapshot } from '@/data/storage';
 export type WaitEstimate =
   | { status: 'collecting' }
   | { status: 'stalled'; days: number }
-  | { status: 'estimated'; months: number; days: number; decrease: number; source: 'rank' | 'wait' };
+  | { status: 'estimated'; months: number; days: number; decrease: number; source: 'rank' | 'moveout' | 'wait' };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // 대기인원은 한 달에 몇 번 바뀌지 않아서, 너무 짧은 기간으로 계산하면 속도가 크게 튄다.
@@ -24,13 +24,24 @@ function estimateFromRanks(ranks: RankSnapshot[] | undefined, rank: number): Wai
 }
 
 /**
+ * 마이홈이 공개하는 최근 1년 퇴거 세대 수로 계산합니다. 한 해에 그만큼 집이 비고 예비입주자에게 차례대로 돌아간다고 봐요.
+ * 1년치 실적이라 짧은 기간의 대기인원 변화보다 안정적이에요.
+ */
+function estimateFromMoveOuts(moveOutPerYear: number | undefined, rank: number): WaitEstimate | undefined {
+  if (!moveOutPerYear || moveOutPerYear <= 0) return undefined;
+  return { status: 'estimated', months: (rank / moveOutPerYear) * 12, days: 365, decrease: moveOutPerYear, source: 'moveout' };
+}
+
+/**
  * "지금 속도면 내 차례까지 몇 달"인지 추정합니다.
- * 내 순번 기록이 2주 이상이고 앞당겨졌다면 그 속도를 쓰고, 아니면 서버가 기록한 공개 대기인원 변화를 씁니다.
+ * 내 순번 기록이 2주 이상이고 앞당겨졌다면 그 속도를, 없으면 최근 1년 퇴거 세대 수를, 그것도 없으면 서버가 기록한 공개 대기인원 변화를 씁니다.
  * 대기인원은 줄어든 만큼만 앞으로 나아갔다고 보고(새 대기자는 내 뒤에 붙으므로 늘어난 건 무시), 그 평균 속도로 계산해요.
  */
-export function estimateWait(history: WaitCountSnapshot[] | undefined, rank: number, ranks?: RankSnapshot[], now = Date.now()): WaitEstimate {
+export function estimateWait(history: WaitCountSnapshot[] | undefined, rank: number, ranks?: RankSnapshot[], moveOutPerYear?: number, now = Date.now()): WaitEstimate {
   const fromRanks = estimateFromRanks(ranks, rank);
   if (fromRanks) return fromRanks;
+  const fromMoveOuts = estimateFromMoveOuts(moveOutPerYear, rank);
+  if (fromMoveOuts) return fromMoveOuts;
   if (!history || history.length === 0) return { status: 'collecting' };
   const days = Math.floor((now - new Date(history[0].recordedAt).getTime()) / DAY_MS);
   if (days < MIN_SPAN_DAYS) return { status: 'collecting' };

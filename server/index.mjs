@@ -152,11 +152,15 @@ async function syncApplication(application) {
   const housingTypeLabel = incoming.housingType || row.drwtUnit || row.styleNm;
   const housingTypeText = housingTypeLabel ? `${housingTypeLabel}${String(housingTypeLabel).endsWith('형') ? '' : '형'}` : '공개 대기인원';
   const nextWaitCount = Number(row.waitCo ?? 0);
+  const publicMoveOutCount = Number(row.trmnatCo ?? 0);
   const publicWaitBreakdown = allMatches.reduce((groups, item) => {
     const label = item.drwtUnit || item.styleNm || '주택형 미상';
     const existing = groups.find((group) => group.label === label);
-    if (existing) existing.count += Number(item.waitCo ?? 0);
-    else groups.push({ label, count: Number(item.waitCo ?? 0) });
+    // trmnatCo는 마이홈이 공개하는 최근 1년 퇴거(계약 해지) 세대 수다.
+    if (existing) {
+      existing.count += Number(item.waitCo ?? 0);
+      existing.moveOut += Number(item.trmnatCo ?? 0);
+    } else groups.push({ label, count: Number(item.waitCo ?? 0), moveOut: Number(item.trmnatCo ?? 0) });
     return groups;
   }, []);
   const previousWaitCount = current.publicWaitCount;
@@ -175,6 +179,7 @@ async function syncApplication(application) {
     status: 'synced',
     publicWaitCount: nextWaitCount,
     publicWaitBreakdown,
+    publicMoveOutCount,
     publicWaitPreviousCount: previousWaitCount,
     publicWaitHistory,
     publicWaitUpdatedAt: checkedAt,
@@ -192,7 +197,7 @@ async function syncApplication(application) {
     await sendExpoPush(incoming.pushToken, `${row.hsmpNm} ${housingTypeText} 대기현황 변동`, body);
   }
 
-  return { id: application.id, status: 'synced', changed, publicWaitCount: nextWaitCount, previousWaitCount, publicWaitBreakdown, publicWaitHistory, matched: row };
+  return { id: application.id, status: 'synced', changed, publicWaitCount: nextWaitCount, previousWaitCount, publicWaitBreakdown, publicMoveOutCount, publicWaitHistory, matched: row };
 }
 
 function formatVacancyLabel(label) {

@@ -10,6 +10,8 @@ export type RankSnapshot = {
 export type PublicWaitBreakdown = {
   label: string;
   count: number;
+  /** 최근 1년 퇴거 세대 수 */
+  moveOut?: number;
 };
 
 export type WaitCountSnapshot = {
@@ -52,6 +54,8 @@ export type HousingApplication = {
   housingType?: string;
   publicWaitCount?: number;
   publicWaitBreakdown?: PublicWaitBreakdown[];
+  // 내 주택형의 최근 1년 퇴거 세대 수. 1년에 몇 집이 비는지로 예상 시기를 계산한다.
+  publicMoveOutCount?: number;
   publicWaitPreviousCount?: number;
   publicWaitUpdatedAt?: string;
   // 서버가 기록한 공개 대기인원 변화. 입주까지 예상 기간을 계산할 때 쓴다.

@@ -216,7 +216,7 @@ export default function HomeScreen() {
   const rankChange = selected ? selected.previousRank - selected.rank : 0;
   // 개인 예비순번은 공개 API로 알 수 없어서, 대기인원이 줄어든 만큼 앞당겨졌다고 추정한다.
   const estimatedRank = selected?.waitAdvance ? Math.max(1, selected.rank - selected.waitAdvance) : undefined;
-  const waitEstimate = selected ? estimateWait(selected.publicWaitHistory, estimatedRank ?? selected.rank, selected.history) : undefined;
+  const waitEstimate = selected ? estimateWait(selected.publicWaitHistory, estimatedRank ?? selected.rank, selected.history, selected.publicMoveOutCount) : undefined;
   const waitEstimateShort = waitEstimate ? shortWaitEstimate(waitEstimate) : undefined;
   const publicMaxWait = Math.max(1, ...(selected?.publicWaitBreakdown?.map((item) => item.count) ?? []));
   const upcoming = upcomingEvents(data.events);
@@ -484,6 +484,7 @@ export default function HomeScreen() {
           syncStatus: result.status,
           publicWaitCount: result.publicWaitCount,
           publicWaitBreakdown: result.publicWaitBreakdown,
+          publicMoveOutCount: result.publicMoveOutCount,
           publicWaitHistory: result.publicWaitHistory ?? item.publicWaitHistory,
           publicWaitPreviousCount: result.previousWaitCount,
           publicWaitUpdatedAt: result.checkedAt,
@@ -878,17 +879,17 @@ export default function HomeScreen() {
                 <Text style={styles.sheetDescription}>{isSyncing ? '마이홈 공개 현황을 확인하고 있어요…' : selected.syncMessage || (selected.housingType && selected.publicWaitCount !== undefined ? `${selected.housingType}형 현재 대기인원 ${selected.publicWaitCount}명` : '주택형별로 공개된 대기인원을 확인해요.')}</Text>
                 <Pressable style={styles.sheetRefreshButton} onPress={() => void runPublicSync(selected, pushTokenRef.current, true)} disabled={isSyncing}><Text style={styles.sheetRefreshText}>{isSyncing ? '확인 중…' : '대기현황 지금 확인'}</Text></Pressable>
                 {selected.publicWaitBreakdown?.length ? <View style={styles.sheetDataPanel}>
-                  <View style={styles.breakdownPanelHeader}><Text style={styles.breakdownPanelTitle}>주택형별 대기인원</Text><Text style={styles.breakdownPanelHint}>{selected.housingType ? `${selected.housingType} 선택됨` : '전체'}</Text></View>
+                  <View style={styles.breakdownPanelHeader}><Text style={styles.breakdownPanelTitle}>주택형별 대기인원 · 1년 퇴거</Text><Text style={styles.breakdownPanelHint}>{selected.housingType ? `${selected.housingType} 선택됨` : '전체'}</Text></View>
                   {selected.publicWaitBreakdown.map((item) => <View key={item.label} style={styles.typeRow}>
                     <View style={styles.typeName}><Text style={styles.typeLabel}>{item.label}</Text>{selected.housingType === item.label && <Text style={styles.myTypeLabel}>내 주택형</Text>}</View>
                     <View style={styles.typeBarTrack}><View style={[styles.typeBarFill, { width: `${Math.max(5, (item.count / publicMaxWait) * 100)}%` }]} /></View>
-                    <Text style={styles.typeCount}>{item.count}명</Text>
+                    <View style={styles.typeCountBox}><Text style={styles.typeCount}>{item.count}명</Text>{item.moveOut !== undefined && <Text style={styles.typeMoveOut}>1년 퇴거 {item.moveOut}</Text>}</View>
                   </View>)}
                 </View> : <Text style={styles.sheetEmpty}>{selected.syncMessage || '아직 공개 대기현황이 없어요. 다시 확인해 주세요.'}</Text>}
                 {selected.syncStatus === 'synced' && waitEstimate && <View style={styles.estimatePanel}>
                   <Text style={styles.breakdownPanelTitle}>내 차례까지 예상</Text>
                   <Text style={styles.estimateText}>{formatWaitEstimate(waitEstimate)}</Text>
-                  {waitEstimate.status === 'estimated' && <Text style={styles.estimateBasis}>{waitEstimate.source === 'rank' ? `순번 기록 ${waitEstimate.days}일 동안 ${waitEstimate.decrease}칸 앞당겨진 속도와` : `최근 ${waitEstimate.days}일 동안 대기인원이 ${waitEstimate.decrease}명 줄어든 속도와`} {estimatedRank !== undefined ? '예상' : '현재'} 순번 {estimatedRank ?? selected.rank}번 기준이에요. 공가 발생에 따라 크게 달라질 수 있어요.</Text>}
+                  {waitEstimate.status === 'estimated' && <Text style={styles.estimateBasis}>{waitEstimate.source === 'rank' ? `순번 기록 ${waitEstimate.days}일 동안 ${waitEstimate.decrease}칸 앞당겨진 속도와` : waitEstimate.source === 'moveout' ? `최근 1년 동안 ${waitEstimate.decrease}세대가 퇴거한 속도와` : `최근 ${waitEstimate.days}일 동안 대기인원이 ${waitEstimate.decrease}명 줄어든 속도와`} {estimatedRank !== undefined ? '예상' : '현재'} 순번 {estimatedRank ?? selected.rank}번 기준이에요. 공가 발생에 따라 크게 달라질 수 있어요.</Text>}
                 </View>}
                 <TrendChart title="내 순번 변화" unit="번" points={selected.history.map((snapshot) => ({ value: snapshot.rank, recordedAt: snapshot.recordedAt }))} emptyText="순번을 두 번 이상 기록하면 변화를 그래프로 보여드려요." />
                 <Pressable style={styles.chartLink} onPress={() => { setStatusSheet(null); setIsHistoryOpen(true); }}><Text style={styles.chartLinkText}>순번 직접 입력하기 ›</Text></Pressable>
@@ -1075,7 +1076,9 @@ const styles = StyleSheet.create({
   myTypeLabel: { color: '#3c9879', fontSize: 9, fontWeight: '800' },
   typeBarTrack: { flex: 1, height: 7, borderRadius: 5, backgroundColor: '#e5f0ea', overflow: 'hidden' },
   typeBarFill: { height: '100%', borderRadius: 5, backgroundColor: '#72b59b' },
-  typeCount: { width: 42, color: '#347b65', fontSize: 12, fontWeight: '800', textAlign: 'right' },
+  typeCountBox: { width: 64, alignItems: 'flex-end' },
+  typeCount: { color: '#347b65', fontSize: 12, fontWeight: '800', textAlign: 'right' },
+  typeMoveOut: { marginTop: 1, color: '#8a948f', fontSize: 10, fontWeight: '600' },
   syncButton: { backgroundColor: '#e0f1e8', borderRadius: 9, paddingHorizontal: 11, paddingVertical: 9 },
   syncButtonText: { color: '#438d75', fontSize: 12, fontWeight: '800' },
   guestCard: { marginHorizontal: 16, marginTop: 8, backgroundColor: '#e6f3ed', borderRadius: 23, padding: 24, alignItems: 'center' },
