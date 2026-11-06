@@ -117,6 +117,8 @@ export type AppData = {
   profile?: UserProfile;
   noticeAlert?: NoticeAlertSettings;
   events?: ScheduleEvent[];
+  /** 삭제한 신청 ID. 다른 기기와 합칠 때 삭제한 내역이 되살아나지 않게 한다. */
+  deletedApplicationIds?: string[];
 };
 
 const STORAGE_KEY = '@housing-tracker/app-data-v1';
@@ -142,13 +144,15 @@ function mergeById<T extends { id: string }>(remote: T[] = [], local: T[] = []) 
 
 /** 서버 데이터를 기준으로, 이 기기에만 있는 신청·할 일·알림·일정을 더한다. */
 export function mergeAccountData(remote: AppData, local: AppData): AppData {
+  const deletedApplicationIds = [...new Set([...(remote.deletedApplicationIds ?? []), ...(local.deletedApplicationIds ?? [])])].slice(-200);
   return {
     ...local,
     ...remote,
-    applications: mergeById(remote.applications, local.applications),
+    applications: mergeById(remote.applications, local.applications).filter((item) => !deletedApplicationIds.includes(item.id)),
     tasks: mergeById(remote.tasks, local.tasks),
     notifications: mergeById(remote.notifications, local.notifications),
     events: mergeById(remote.events, local.events),
+    deletedApplicationIds,
     noticeAlert: remote.noticeAlert ?? local.noticeAlert,
     pushToken: local.pushToken ?? remote.pushToken,
   };

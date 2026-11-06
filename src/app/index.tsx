@@ -653,7 +653,7 @@ export default function HomeScreen() {
       destructive: true,
       onConfirm: () => {
         const remaining = applications.filter((item) => item.id !== applicationId);
-        updateData({ ...data, applications: remaining });
+        updateData({ ...data, applications: remaining, deletedApplicationIds: [...(data.deletedApplicationIds ?? []), applicationId].slice(-200) });
         setSelectedId(remaining[0]?.id);
         setEditingApplicationId(undefined);
         setIsAddOpen(false);

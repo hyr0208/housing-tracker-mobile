@@ -416,8 +416,25 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, 400, { error: '저장할 계정 정보 형식이 올바르지 않습니다.' });
         return;
       }
+      // 앱에서 삭제한 신청은 알림 대상에서도 뺀다. 이전 계정 목록에서 빠진 것, 삭제 기록에 있는 것,
+      // 이 기기 푸시 토큰으로 등록됐지만 계정 목록에 없는 것(동기화가 안 되던 때 남은 것)을 지운다.
+      const keptIds = new Set(data.applications.map((application) => application?.id).filter(Boolean));
+      const removedIds = new Set([
+        ...(accounts[userId]?.applications ?? []).map((application) => application?.id),
+        ...(Array.isArray(data.deletedApplicationIds) ? data.deletedApplicationIds : []),
+      ].filter((id) => typeof id === 'string' && !keptIds.has(id)));
       accounts[userId] = data;
       await writeAccounts(accounts);
+      const state = await readState();
+      let removed = 0;
+      for (const [id, registration] of Object.entries(state.applications)) {
+        const orphan = typeof data.pushToken === 'string' && registration.pushToken === data.pushToken && !keptIds.has(id);
+        if (removedIds.has(id) || orphan) {
+          delete state.applications[id];
+          removed += 1;
+        }
+      }
+      if (removed > 0) await writeState(state);
       sendJson(response, 200, { ok: true });
       return;
     }
