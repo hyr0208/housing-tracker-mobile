@@ -226,5 +226,5 @@ export async function saveLocalAppData(data: AppData) {
 }
 
 export function makeNotification(title: string, body: string): AppNotification {
-  return { id: `notification-${Date.now()}`, title, body, createdAt: '방금 전', read: false };
+  return { id: `notification-${Date.now()}`, title, body, createdAt: new Date().toISOString(), read: false };
 }

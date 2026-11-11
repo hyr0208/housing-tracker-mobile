@@ -74,14 +74,33 @@ function pushTargetOf(push: Notifications.Notification): PushTarget {
 }
 
 function toPushNotification(push: Notifications.Notification): AppNotification {
-  const receivedAt = new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(push.date));
+  // iOS는 받은 시각을 초 단위로 줄 때가 있어 밀리초로 맞춘다. 그대로 쓰면 1970년 날짜가 된다.
+  const receivedAt = push.date < 1e12 ? push.date * 1000 : push.date;
   return {
     id: `push-${push.request.identifier}`,
     title: push.request.content.title ?? '',
     body: push.request.content.body ?? '',
-    createdAt: receivedAt,
+    createdAt: new Date(receivedAt).toISOString(),
     read: false,
   };
+}
+
+// 알림 시각을 "5분 전", "어제 오후 3:20", "11월 9일 오후 3:20"처럼 보여준다.
+// 예전 알림은 시각 대신 "방금 전"이나 만든 때의 날짜 글자를 저장해 두었으므로, 알 수 있으면 ID의 시각을 쓰고 아니면 그대로 보여준다.
+function formatNotificationTime(item: AppNotification, now = new Date()) {
+  const fromId = /^notification-(\d{13})$/.exec(item.id)?.[1];
+  const date = /^\d{4}-\d{2}-\d{2}T/.test(item.createdAt) ? new Date(item.createdAt) : fromId ? new Date(Number(fromId)) : undefined;
+  if (!date || Number.isNaN(date.getTime())) return item.createdAt;
+  const minutes = Math.floor((now.getTime() - date.getTime()) / 60000);
+  if (minutes < 1) return '방금 전';
+  if (minutes < 60) return `${minutes}분 전`;
+  const hour = date.getHours();
+  const time = `${hour < 12 ? '오전' : '오후'} ${hour % 12 || 12}:${String(date.getMinutes()).padStart(2, '0')}`;
+  const dayDiff = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()) / 86400000);
+  if (dayDiff === 0) return `오늘 ${time}`;
+  if (dayDiff === 1) return `어제 ${time}`;
+  const year = date.getFullYear() === now.getFullYear() ? '' : `${date.getFullYear()}년 `;
+  return `${year}${date.getMonth() + 1}월 ${date.getDate()}일 ${time}`;
 }
 
 const COLORS = {
@@ -988,7 +1007,7 @@ export default function HomeScreen() {
       }} />
 
       <Modal visible={isNotificationOpen} transparent animationType="slide" onRequestClose={() => setIsNotificationOpen(false)}>
-        <View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsNotificationOpen(false)} accessibilityLabel="닫기" /><View style={[styles.modalCard, { paddingBottom: 36 + sheetInset }]}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>NOTIFICATIONS</Text><Text style={styles.modalTitle}>알림 센터</Text></View><Pressable onPress={() => setIsNotificationOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><ScrollView style={styles.notificationList}>{data.notifications.length === 0 ? <Text style={styles.emptyText}>아직 알림이 없어요.</Text> : data.notifications.map((item) => <View key={item.id} style={styles.notificationRow}><View style={styles.notificationIcon}><Text style={styles.tipSpark}>✦</Text></View><View style={styles.notificationCopy}><Text style={styles.notificationTitle}>{item.title}</Text><Text style={styles.notificationBody}>{item.body}</Text><Text style={styles.notificationTime}>{item.createdAt}</Text></View></View>)}</ScrollView><Pressable style={styles.saveButton} onPress={() => { updateData({ ...data, notifications: data.notifications.map((item) => ({ ...item, read: true })) }); setIsNotificationOpen(false); }}><Text style={styles.saveButtonText}>모두 읽음 처리</Text></Pressable></View></View>
+        <View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsNotificationOpen(false)} accessibilityLabel="닫기" /><View style={[styles.modalCard, { paddingBottom: 36 + sheetInset }]}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>NOTIFICATIONS</Text><Text style={styles.modalTitle}>알림 센터</Text></View><Pressable onPress={() => setIsNotificationOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><ScrollView style={styles.notificationList}>{data.notifications.length === 0 ? <Text style={styles.emptyText}>아직 알림이 없어요.</Text> : data.notifications.map((item) => <View key={item.id} style={styles.notificationRow}><View style={styles.notificationIcon}><Text style={styles.tipSpark}>✦</Text></View><View style={styles.notificationCopy}><Text style={styles.notificationTitle}>{item.title}</Text><Text style={styles.notificationBody}>{item.body}</Text><Text style={styles.notificationTime}>{formatNotificationTime(item)}</Text></View></View>)}</ScrollView><Pressable style={styles.saveButton} onPress={() => { updateData({ ...data, notifications: data.notifications.map((item) => ({ ...item, read: true })) }); setIsNotificationOpen(false); }}><Text style={styles.saveButtonText}>모두 읽음 처리</Text></Pressable></View></View>
       </Modal>
 
       <Modal visible={isProfileOpen} transparent animationType="slide" onRequestClose={() => setIsProfileOpen(false)}>
