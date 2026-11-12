@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { CollapsibleFilters } from '@/components/collapsible-filters';
 import { loadAppData, saveAppData, subscribeToAppData, type NoticeAlertSettings, type ScheduleEvent } from '@/data/storage';
 import { applyPhaseOf, fetchNotices, matchesNoticeSettings, NOTICE_REGIONS, NOTICE_SORTS, NOTICE_SUPPLY_TYPES, saveNoticeAlert, sortNotices, type HousingNotice, type NoticeSort } from '@/services/notices';
 import { toDateKey } from '@/services/schedule';
@@ -105,6 +106,7 @@ export function NoticeAlertsSection() {
       </View>
       <Text style={styles.description}>관심 지역을 고르고 알림을 켜면, 조건에 맞는 새 공고가 올라올 때 알려드려요.</Text>
 
+      <CollapsibleFilters summary={`${settings.regions.length ? settings.regions.join(', ') : '전국'} · ${settings.supplyTypes.length ? settings.supplyTypes.join(', ') : '전체 유형'}`}>
       <Text style={styles.groupLabel}>관심 지역</Text>
       <View style={styles.chips}>
         {NOTICE_REGIONS.map((region) => <Pressable key={region} style={[styles.chip, settings.regions.includes(region) && styles.chipSelected]} onPress={() => toggleItem('regions', region)}><Text style={[styles.chipText, settings.regions.includes(region) && styles.chipTextSelected]}>{region}</Text></Pressable>)}
@@ -113,6 +115,7 @@ export function NoticeAlertsSection() {
       <View style={styles.chips}>
         {NOTICE_SUPPLY_TYPES.map((type) => <Pressable key={type} style={[styles.chip, settings.supplyTypes.includes(type) && styles.chipSelected]} onPress={() => toggleItem('supplyTypes', type)}><Text style={[styles.chipText, settings.supplyTypes.includes(type) && styles.chipTextSelected]}>{type}</Text></Pressable>)}
       </View>
+      </CollapsibleFilters>
       {statusMessage && <Text style={styles.status}>{statusMessage}</Text>}
 
       <View style={styles.listHeader}>

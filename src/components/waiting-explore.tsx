@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { CollapsibleFilters } from '@/components/collapsible-filters';
 import { loadAppData } from '@/data/storage';
 import { NOTICE_REGIONS } from '@/services/notices';
 import { fetchWaitingExplore, type ExploreComplex } from '@/services/waiting-explore';
@@ -53,6 +54,7 @@ export function WaitingExplore() {
   return (
     <View style={styles.section}>
       <Text style={styles.description}>마이홈에 공개된 단지별 예비입주자 대기인원이에요. 대기인원이 적을수록 빨리 차례가 올 가능성이 커요.</Text>
+      <CollapsibleFilters summary={`${region ?? '지역 선택'} · ${supplyType ?? '전체 유형'}`}>
       <Text style={styles.groupLabel}>지역</Text>
       <View style={styles.chips}>
         {NOTICE_REGIONS.map((item) => <Pressable key={item} style={[styles.chip, region === item && styles.chipSelected]} onPress={() => setRegion(item)}><Text style={[styles.chipText, region === item && styles.chipTextSelected]}>{item}</Text></Pressable>)}
@@ -64,6 +66,7 @@ export function WaitingExplore() {
           {supplyTypes.map((item) => <Pressable key={item} style={[styles.chip, supplyType === item && styles.chipSelected]} onPress={() => setSupplyType(item)}><Text style={[styles.chipText, supplyType === item && styles.chipTextSelected]}>{item}</Text></Pressable>)}
         </View>
       </>}
+      </CollapsibleFilters>
       {complexes.length > 0 && <TextInput value={keyword} onChangeText={setKeyword} placeholder="단지명이나 시·군·구로 찾기" placeholderTextColor="#a9b4ae" style={styles.search} />}
 
       {isLoading ? <View style={styles.loading}><ActivityIndicator color="#327e67" /><Text style={styles.loadingText}>{region} 단지를 모으고 있어요. 처음에는 20초쯤 걸릴 수 있어요.</Text></View>
