@@ -76,6 +76,10 @@ export type ChecklistTask = {
   title: string;
   detail: string;
   done: boolean;
+  /** 이 날까지 해야 하는 날짜(YYYY-MM-DD). 하루 전과 당일 오전 9시에 알린다. */
+  dueDate?: string;
+  /** 추천 항목에서 추가했다면 그 항목 ID. 같은 추천을 두 번 넣지 않게 한다. */
+  templateId?: string;
 };
 
 export type AppNotification = {

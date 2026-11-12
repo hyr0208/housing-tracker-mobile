@@ -32,7 +32,7 @@ import {
 } from '@/data/storage';
 import { AddTaskSheet } from '@/components/add-task-sheet';
 import { AddEventSheet } from '@/components/add-event-sheet';
-import { formatDday, formatEventDate, kindLabel, syncScheduleReminders, upcomingEvents } from '@/services/schedule';
+import { formatDday, formatEventDate, kindLabel, syncScheduleReminders, syncTaskReminders, upcomingEvents } from '@/services/schedule';
 import { TrendChart } from '@/components/trend-chart';
 import { RankHistorySheet } from '@/components/rank-history-sheet';
 import { ComplexInfoPanel } from '@/components/complex-info';
@@ -281,6 +281,13 @@ export default function HomeScreen() {
     if (!isReady) return;
     void syncScheduleReminders(JSON.parse(eventsKey)).catch(() => undefined);
   }, [isReady, eventsKey]);
+
+  // 체크리스트 마감일 알림도 같은 방식으로 다시 예약한다. 마감일·완료 여부만 비교해 체크할 때마다 다시 예약하지 않게 한다.
+  const taskDueKey = JSON.stringify(data.tasks.filter((task) => task.dueDate && !task.done).map(({ id, title, dueDate }) => ({ id, title, dueDate })));
+  useEffect(() => {
+    if (!isReady) return;
+    void syncTaskReminders(JSON.parse(taskDueKey)).catch(() => undefined);
+  }, [isReady, taskDueKey]);
 
   // 서버가 보낸 푸시(대기·공가 변동)는 앱 밖에서 도착하므로, 받거나 알림 트레이에 남아 있는 것을 알림 센터에 옮겨 담는다.
   useEffect(() => {
@@ -994,8 +1001,8 @@ export default function HomeScreen() {
         <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsRankOpen(false)} accessibilityLabel="닫기" /><View style={[styles.modalCard, { paddingBottom: 36 + sheetInset }]}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>UPDATE RANK</Text><Text style={styles.modalTitle}>현재 순번 기록</Text></View><Pressable onPress={() => setIsRankOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>{selected.title}의 공고문이나 대기현황에서 확인한 최신 순번을 입력하세요.</Text><Text style={styles.inputLabel}>현재 예비순번</Text><TextInput value={draftRank} onChangeText={setDraftRank} keyboardType="number-pad" placeholder="예: 24" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Pressable onPress={() => void Linking.openURL(LH_APPLY_URL)} style={styles.lhLink}><Text style={styles.lhLinkText}>LH청약플러스에서 내 순번 확인하기 ↗</Text></Pressable><View style={styles.historyHeader}><Text style={styles.historyTitle}>최근 순번 이력</Text><Pressable onPress={() => { setIsRankOpen(false); setIsHistoryOpen(true); }} hitSlop={8}><Text style={styles.historyManage}>지난 기록 추가 ›</Text></Pressable></View><View style={styles.historyList}>{selected.history.slice(-3).reverse().map((snapshot) => <View key={`${snapshot.recordedAt}-${snapshot.rank}`} style={styles.historyRow}><Text style={styles.historyDate}>{snapshot.recordedAt}</Text><Text style={styles.historyRank}>{snapshot.rank}번</Text></View>)}</View><Pressable style={styles.saveButton} onPress={saveRank}><Text style={styles.saveButtonText}>순번 업데이트 저장  →</Text></Pressable></View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
       </Modal>}
 
-      <AddTaskSheet visible={isAddTaskOpen} onClose={() => setIsAddTaskOpen(false)} onAdd={(title, detail) => {
-        updateData({ ...data, tasks: [...tasks, { id: `task-${Date.now()}`, title, detail: detail || '직접 추가한 준비 항목', done: false }] });
+      <AddTaskSheet visible={isAddTaskOpen} onClose={() => setIsAddTaskOpen(false)} onAdd={(title, detail, dueDate) => {
+        updateData({ ...data, tasks: [...tasks, { id: `task-${Date.now()}`, title, detail: detail || '직접 추가한 준비 항목', done: false, ...(dueDate ? { dueDate } : {}) }] });
         setIsAddTaskOpen(false);
       }} />
 

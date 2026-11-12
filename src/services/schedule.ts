@@ -1,5 +1,5 @@
 import * as Notifications from 'expo-notifications';
-import type { ScheduleEvent, ScheduleKind } from '@/data/storage';
+import type { ChecklistTask, ScheduleEvent, ScheduleKind } from '@/data/storage';
 
 export const SCHEDULE_KINDS: { key: ScheduleKind; label: string }[] = [
   { key: 'apply', label: '접수' },
@@ -10,6 +10,7 @@ export const SCHEDULE_KINDS: { key: ScheduleKind; label: string }[] = [
 ];
 
 const REMINDER_PREFIX = 'schedule-';
+const TASK_REMINDER_PREFIX = 'task-due-';
 const REMINDER_HOUR = 9;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -90,6 +91,43 @@ export async function syncScheduleReminders(events: ScheduleEvent[] = []) {
         identifier: `${REMINDER_PREFIX}${event.id}-${reminder.suffix}`,
         content: { title: reminder.title, body: reminder.body, sound: 'default' },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: reminder.at },
+      });
+    }
+  }
+}
+
+// 체크리스트 마감일 표시. 예: "11.20까지 · D-3", "오늘까지", "2일 지남"
+export function formatTaskDue(dueDate: string, today = new Date()) {
+  const days = Math.round((startOfDay(dueDate).getTime() - startOfDay(toDateKey(today)).getTime()) / DAY_MS);
+  const short = `${Number(dueDate.slice(5, 7))}.${Number(dueDate.slice(8, 10))}`;
+  if (days > 0) return { label: `${short}까지 · D-${days}`, overdue: false };
+  if (days === 0) return { label: '오늘까지', overdue: false };
+  return { label: `${short}까지 · ${-days}일 지남`, overdue: true };
+}
+
+/** 마감일이 있는 체크리스트 항목을 하루 전과 당일 오전 9시에 알린다. 완료한 항목은 알리지 않는다. */
+export async function syncTaskReminders(tasks: ChecklistTask[] = []) {
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  await Promise.all(scheduled
+    .filter((item) => item.identifier.startsWith(TASK_REMINDER_PREFIX))
+    .map((item) => Notifications.cancelScheduledNotificationAsync(item.identifier)));
+
+  const now = Date.now();
+  for (const task of tasks) {
+    if (task.done || !task.dueDate) continue;
+    const reminders = [
+      { suffix: 'before', offsetDays: -1, title: '내일까지 해야 할 준비가 있어요' },
+      { suffix: 'today', offsetDays: 0, title: '오늘까지 해야 할 준비예요' },
+    ];
+    for (const reminder of reminders) {
+      const at = startOfDay(task.dueDate);
+      at.setDate(at.getDate() + reminder.offsetDays);
+      at.setHours(REMINDER_HOUR, 0, 0, 0);
+      if (at.getTime() <= now) continue;
+      await Notifications.scheduleNotificationAsync({
+        identifier: `${TASK_REMINDER_PREFIX}${task.id}-${reminder.suffix}`,
+        content: { title: reminder.title, body: task.title, sound: 'default' },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at },
       });
     }
   }
