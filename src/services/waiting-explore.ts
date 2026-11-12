@@ -13,7 +13,7 @@ export type ExploreComplex = {
 // 마이홈 대기현황 API의 광역시도 코드
 export const REGION_CODES: Record<string, string> = {
   서울: '11', 부산: '26', 대구: '27', 인천: '28', 광주: '29', 대전: '30', 울산: '31', 세종: '36', 경기: '41',
-  강원: '42', 충북: '43', 충남: '44', 전북: '45', 전남: '46', 경북: '47', 경남: '48', 제주: '50',
+  강원: '51', 충북: '43', 충남: '44', 전북: '52', 전남: '46', 경북: '47', 경남: '48', 제주: '50',
 };
 
 const syncServerUrl = (process.env.EXPO_PUBLIC_SYNC_SERVER_URL || 'http://127.0.0.1:8787').replace(/\/$/, '');

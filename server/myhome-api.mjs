@@ -61,7 +61,8 @@ async function fetchWithRetry(url, attempts = 5) {
   }
 }
 
-export async function fetchWaitingRows({ brtcCode, signguCode, suplyTy, houseTy, complexName, housingType, searchKeyword }) {
+export async function fetchWaitingRows({ brtcCode: requestedBrtcCode, signguCode, suplyTy, houseTy, complexName, housingType, searchKeyword }) {
+  const brtcCode = currentBrtcCode(requestedBrtcCode);
   if (!brtcCode) throw new Error('광역시도 코드(brtcCode)가 필요합니다.');
 
   const cacheKey = [brtcCode, signguCode || '', suplyTy || '', houseTy || '', normalizeName(complexName), normalizeName(searchKeyword)].join('|');
@@ -182,7 +183,8 @@ function refreshAllWaitingRows(brtcCode) {
  * 화면용 조회(maxAgeMs 생략)는 오래된 목록을 바로 돌려주고 뒤에서 새로 받고,
  * 변동 알림용 조회(maxAgeMs 지정)는 새로 받을 때까지 기다리되 실패하면 갖고 있던 목록을 쓴다.
  */
-export async function fetchAllWaitingRows(brtcCode, { maxAgeMs } = {}) {
+export async function fetchAllWaitingRows(requestedBrtcCode, { maxAgeMs } = {}) {
+  const brtcCode = currentBrtcCode(requestedBrtcCode);
   const cached = allRowsCache.get(brtcCode);
   const age = cached ? Date.now() - cached.fetchedAt : Infinity;
   if (cached && age < (maxAgeMs ?? allRowsCacheTtlMs)) return cached.rows;
@@ -192,7 +194,13 @@ export async function fetchAllWaitingRows(brtcCode, { maxAgeMs } = {}) {
   return cached.rows;
 }
 
-export const BRTC_CODES = ['11', '26', '27', '28', '29', '30', '31', '36', '41', '42', '43', '44', '45', '46', '47', '48', '50'];
+export const BRTC_CODES = ['11', '26', '27', '28', '29', '30', '31', '36', '41', '51', '43', '44', '52', '46', '47', '48', '50'];
+
+// 강원(2023)·전북(2024)이 특별자치도가 되면서 마이홈 코드가 51·52로 바뀌었다. 예전 코드로 저장된 신청 건도 그대로 조회되게 바꿔 준다.
+const RENAMED_BRTC_CODES = { 42: '51', 45: '52' };
+export function currentBrtcCode(brtcCode) {
+  return RENAMED_BRTC_CODES[brtcCode] ?? brtcCode;
+}
 
 // 모든 지역 목록을 미리 받아 둬서 단지 검색과 대기현황 탐색이 바로 뜨게 한다.
 // 아직 신선한 지역은 건너뛰고, 마이홈 API에 몰리지 않게 지역을 하나씩 받는다.

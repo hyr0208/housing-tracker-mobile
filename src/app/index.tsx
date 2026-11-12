@@ -169,7 +169,7 @@ function formatHousingType(label?: string) {
 
 function getBrtcCode(area = '') {
   const value = area.trim();
-  return value.startsWith('서울') ? '11' : value.startsWith('부산') ? '26' : value.startsWith('대구') ? '27' : value.startsWith('인천') ? '28' : value.startsWith('광주') ? '29' : value.startsWith('대전') ? '30' : value.startsWith('울산') ? '31' : value.startsWith('세종') ? '36' : value.startsWith('경기') ? '41' : value.startsWith('강원') ? '42' : value.startsWith('충북') ? '43' : value.startsWith('충남') ? '44' : value.startsWith('전북') ? '45' : value.startsWith('전남') ? '46' : value.startsWith('경북') ? '47' : value.startsWith('경남') ? '48' : value.startsWith('제주') ? '50' : undefined;
+  return value.startsWith('서울') ? '11' : value.startsWith('부산') ? '26' : value.startsWith('대구') ? '27' : value.startsWith('인천') ? '28' : value.startsWith('광주') ? '29' : value.startsWith('대전') ? '30' : value.startsWith('울산') ? '31' : value.startsWith('세종') ? '36' : value.startsWith('경기') ? '41' : value.startsWith('강원') ? '51' : value.startsWith('충북') ? '43' : value.startsWith('충남') ? '44' : value.startsWith('전북') ? '52' : value.startsWith('전남') ? '46' : value.startsWith('경북') ? '47' : value.startsWith('경남') ? '48' : value.startsWith('제주') ? '50' : undefined;
 }
 
 function CustomDialog({ dialog, onDismiss }: { dialog: DialogState; onDismiss: () => void }) {
