@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SheetModal } from '@/components/sheet-modal';
 import type { ChecklistTask } from '@/data/storage';
 import { MonthCalendar } from '@/components/month-calendar';
 import { useSheetBottomInset } from '@/hooks/use-sheet-bottom-inset';
@@ -42,7 +43,7 @@ export function AddTaskSheet({ visible, onClose, onAdd, editing, prefill, onOpen
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <SheetModal visible={visible} onRequestClose={onClose}>
       <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="닫기" />
         <View style={[styles.modalCard, { paddingBottom: 34 + sheetInset }]}>
@@ -64,13 +65,13 @@ export function AddTaskSheet({ visible, onClose, onAdd, editing, prefill, onOpen
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </SheetModal>
   );
 }
 
 const styles = StyleSheet.create({
   eyebrow: { color: '#9aa9a1', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(33, 55, 46, 0.28)', justifyContent: 'flex-end' },
+  modalBackdrop: { flex: 1, justifyContent: 'flex-end' },
   modalCard: { maxHeight: '90%', backgroundColor: '#fff', borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 24, paddingBottom: 34 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   modalTitle: { color: '#29483d', fontSize: 21, fontWeight: '800', marginTop: 7 },

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SheetModal } from '@/components/sheet-modal';
 import type { RankSnapshot } from '@/data/storage';
 import { MonthCalendar } from '@/components/month-calendar';
 import { toDateKey } from '@/services/schedule';
@@ -55,7 +56,7 @@ export function RankHistorySheet({ visible, history, onClose, onSave }: Props) {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <SheetModal visible={visible} onRequestClose={onClose}>
       <KeyboardAvoidingView behavior="padding" style={styles.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="닫기" />
         <View style={[styles.card, { paddingBottom: 34 + sheetInset }]}>
@@ -81,12 +82,12 @@ export function RankHistorySheet({ visible, history, onClose, onSave }: Props) {
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </SheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(33, 55, 46, 0.28)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, justifyContent: 'flex-end' },
   card: { maxHeight: '90%', backgroundColor: '#fff', borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 24, paddingBottom: 34 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   eyebrow: { color: '#9aa9a1', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },

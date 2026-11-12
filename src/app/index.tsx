@@ -3,7 +3,6 @@ import {
   AppState,
   KeyboardAvoidingView,
   Linking,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { SheetModal } from '@/components/sheet-modal';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { useRouter } from 'expo-router';
@@ -917,7 +917,7 @@ export default function HomeScreen() {
           </View>}
         </ScrollView>
 
-      {selected && <Modal visible={statusSheet !== null} transparent animationType="slide" onRequestClose={() => setStatusSheet(null)}>
+      {selected && <SheetModal visible={statusSheet !== null} backdropColor="#203b3066" onRequestClose={() => setStatusSheet(null)}>
         <View style={styles.statusSheetBackdrop}>
           <Pressable style={styles.statusSheetDismissArea} onPress={() => setStatusSheet(null)} accessibilityLabel="닫기" />
           <View style={styles.statusSheet}>
@@ -969,9 +969,9 @@ export default function HomeScreen() {
           </View>
           {dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}
         </View>
-      </Modal>}
+      </SheetModal>}
 
-      <Modal visible={isAddOpen} transparent animationType="slide" onRequestClose={() => setIsAddOpen(false)}>
+      <SheetModal visible={isAddOpen} backdropColor="#203b3088" onRequestClose={() => setIsAddOpen(false)}>
         <KeyboardAvoidingView behavior="padding" style={[styles.modalBackdrop, { paddingTop: insets.top + 12 }]}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsAddOpen(false)} accessibilityLabel="닫기" />
           <View style={[styles.modalCard, styles.formModalCard]}>
             <View style={styles.modalHeader}>
@@ -1026,11 +1026,11 @@ export default function HomeScreen() {
           </View>
           {dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}
         </KeyboardAvoidingView>
-      </Modal>
+      </SheetModal>
 
-      {selected && <Modal visible={isRankOpen} transparent animationType="slide" onRequestClose={() => setIsRankOpen(false)}>
+      {selected && <SheetModal visible={isRankOpen} backdropColor="#203b3088" onRequestClose={() => setIsRankOpen(false)}>
         <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsRankOpen(false)} accessibilityLabel="닫기" /><View style={[styles.modalCard, { paddingBottom: 36 + sheetInset }]}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>UPDATE RANK</Text><Text style={styles.modalTitle}>현재 순번 기록</Text></View><Pressable onPress={() => setIsRankOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>{selected.title}의 공고문이나 대기현황에서 확인한 최신 순번을 입력하세요.</Text><Text style={styles.inputLabel}>현재 예비순번</Text><TextInput value={draftRank} onChangeText={setDraftRank} keyboardType="number-pad" placeholder="예: 24" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Pressable onPress={() => void Linking.openURL(LH_APPLY_URL)} style={styles.lhLink}><Text style={styles.lhLinkText}>LH청약플러스에서 내 순번 확인하기 ↗</Text></Pressable><View style={styles.historyHeader}><Text style={styles.historyTitle}>최근 순번 이력</Text><Pressable onPress={() => { setIsRankOpen(false); setIsHistoryOpen(true); }} hitSlop={8}><Text style={styles.historyManage}>지난 기록 추가 ›</Text></Pressable></View><View style={styles.historyList}>{selected.history.slice(-3).reverse().map((snapshot) => <View key={`${snapshot.recordedAt}-${snapshot.rank}`} style={styles.historyRow}><Text style={styles.historyDate}>{snapshot.recordedAt}</Text><Text style={styles.historyRank}>{snapshot.rank}번</Text></View>)}</View><Pressable style={styles.saveButton} onPress={saveRank}><Text style={styles.saveButtonText}>순번 업데이트 저장  →</Text></Pressable></View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
-      </Modal>}
+      </SheetModal>}
 
       <AddTaskSheet visible={isAddTaskOpen} onClose={closeAddTask} editing={editingTask} prefill={pickedTemplate} onOpenSuggestions={() => { closeAddTask(); setTimeout(() => setIsSuggestOpen(true), 400); }} onAdd={(title, detail, dueDate) => {
         const nextTasks = editingTask
@@ -1048,13 +1048,13 @@ export default function HomeScreen() {
         setIsAddEventOpen(false);
       }} />
 
-      <Modal visible={isNotificationOpen} transparent animationType="slide" onRequestClose={() => setIsNotificationOpen(false)}>
+      <SheetModal visible={isNotificationOpen} backdropColor="#203b3088" onRequestClose={() => setIsNotificationOpen(false)}>
         <View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsNotificationOpen(false)} accessibilityLabel="닫기" /><View style={[styles.modalCard, { paddingBottom: 36 + sheetInset }]}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>NOTIFICATIONS</Text><Text style={styles.modalTitle}>알림 센터</Text></View><Pressable onPress={() => setIsNotificationOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><ScrollView style={styles.notificationList}>{data.notifications.length === 0 ? <Text style={styles.emptyText}>아직 알림이 없어요.</Text> : data.notifications.map((item) => <View key={item.id} style={styles.notificationRow}><View style={styles.notificationIcon}><Text style={styles.tipSpark}>✦</Text></View><View style={styles.notificationCopy}><Text style={styles.notificationTitle}>{item.title}</Text><Text style={styles.notificationBody}>{item.body}</Text><Text style={styles.notificationTime}>{formatNotificationTime(item)}</Text></View></View>)}</ScrollView><Pressable style={styles.saveButton} onPress={() => { updateData({ ...data, notifications: data.notifications.map((item) => ({ ...item, read: true })) }); setIsNotificationOpen(false); }}><Text style={styles.saveButtonText}>모두 읽음 처리</Text></Pressable></View></View>
-      </Modal>
+      </SheetModal>
 
-      <Modal visible={isProfileOpen} transparent animationType="slide" onRequestClose={() => setIsProfileOpen(false)}>
+      <SheetModal visible={isProfileOpen} backdropColor="#203b3088" onRequestClose={() => setIsProfileOpen(false)}>
                 <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsProfileOpen(false)} accessibilityLabel="닫기" /><View style={[styles.modalCard, { paddingBottom: 36 + sheetInset }]}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>MY PROFILE</Text><Text style={styles.modalTitle} onLongPress={() => { if (!data.profile) setIsReviewLoginOpen(true); }}>내 정보</Text></View><Pressable onPress={() => setIsProfileOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View>{data.profile ? <><Text style={styles.loggedInLabel}>{data.profile.provider === 'apple' ? 'Apple로 로그인됨' : data.profile.provider === 'review' ? '심사용 계정으로 로그인됨' : '카카오로 로그인됨'}</Text><Text style={styles.loggedInName}>{data.profile.nickname}</Text><Text style={styles.modalCopy}>신청 내역과 알림 설정이 내 계정에 저장돼요.</Text>{accountSyncError && <Text style={styles.syncErrorText}>계정 동기화가 안 되고 있어요: {accountSyncError}</Text>}<Pressable style={styles.outlineButton} onPress={logout}><Text style={styles.outlineButtonText}>로그아웃</Text></Pressable><Pressable style={styles.deleteAccountButton} onPress={deleteAccount} disabled={isDeletingAccount}><Text style={styles.deleteAccountText}>{isDeletingAccount ? '계정 삭제 중…' : '계정 삭제'}</Text></Pressable></> : <><Text style={styles.modalCopy}>로그인하면 신청 내역과 알림 설정을 계정에 저장하고 다른 기기에서도 불러올 수 있어요.</Text>{canUseAppleSignIn && <AppleAuthentication.AppleAuthenticationButton buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN} buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK} cornerRadius={11} style={[styles.appleButton, isAppleLoading && styles.appleButtonLoading]} onPress={() => { if (!isAppleLoading) void handleAppleLogin(); }} />}<Pressable style={styles.kakaoButton} disabled={!kakaoNativeAppKey || isKakaoLoading} onPress={() => void handleKakaoLogin()}><View style={styles.kakaoSymbol}><View style={styles.kakaoBubble} /><View style={styles.kakaoTail} /></View><Text style={styles.kakaoButtonText}>{isKakaoLoading ? '로그인 중…' : '카카오로 로그인'}</Text></Pressable>{isReviewLoginOpen && <><Text style={styles.inputLabel}>심사용 아이디</Text><TextInput value={draftReviewId} onChangeText={setDraftReviewId} autoCapitalize="none" autoCorrect={false} placeholderTextColor="#a9b4ae" style={styles.input} /><Text style={styles.inputLabel}>비밀번호</Text><TextInput value={draftReviewPassword} onChangeText={setDraftReviewPassword} secureTextEntry autoCapitalize="none" autoCorrect={false} placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} disabled={isReviewLoading} onPress={() => void handleReviewLogin()}><Text style={styles.saveButtonText}>{isReviewLoading ? '로그인 중…' : '로그인'}</Text></Pressable></>}<Text style={styles.loginHint}>로그인하지 않고 이름만 저장할 수도 있어요.</Text><Text style={styles.inputLabel}>이름</Text><TextInput value={draftProfileName} onChangeText={setDraftProfileName} placeholder="예: 민지" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={() => { const name = draftProfileName.trim(); if (!name) return; updateData({ ...data, profileName: name }); setIsProfileOpen(false); }}><Text style={styles.saveButtonText}>이름만 저장하기</Text></Pressable></>}</View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
-      </Modal>
+      </SheetModal>
 
       {dialog && !isAddOpen && !isRankOpen && !isNotificationOpen && !isProfileOpen && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}
     </SafeAreaView>
@@ -1226,8 +1226,8 @@ const styles = StyleSheet.create({
   tipBody: { color: '#809188', fontSize: 11, marginTop: 3 },
   chevron: { color: '#89a494', fontSize: 24, fontWeight: '300' },
   chevronDown: { color: '#89a494', fontSize: 19 },
-  modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#203b3088' },
-  statusSheetBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#203b3066' },
+  modalBackdrop: { flex: 1, justifyContent: 'flex-end' },
+  statusSheetBackdrop: { flex: 1, justifyContent: 'flex-end' },
   statusSheetDismissArea: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   statusSheet: { maxHeight: '82%', backgroundColor: '#fff', borderTopLeftRadius: 25, borderTopRightRadius: 25, paddingHorizontal: 22, paddingTop: 11 },
   sheetHandle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: '#d5dfd9', marginBottom: 15 },

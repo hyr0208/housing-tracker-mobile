@@ -1,4 +1,5 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SheetModal } from '@/components/sheet-modal';
 import { CHECKLIST_TEMPLATES, type ChecklistTemplateItem } from '@/data/checklist-templates';
 import { useSheetBottomInset } from '@/hooks/use-sheet-bottom-inset';
 
@@ -15,7 +16,7 @@ export function ChecklistSuggestSheet({ visible, onClose, addedIds, onPick }: Pr
   const sheetInset = useSheetBottomInset();
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <SheetModal visible={visible} onRequestClose={onClose}>
       <View style={styles.modalBackdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="닫기" />
         <View style={[styles.modalCard, { paddingBottom: 24 + sheetInset }]}>
@@ -47,13 +48,13 @@ export function ChecklistSuggestSheet({ visible, onClose, addedIds, onPick }: Pr
           </ScrollView>
         </View>
       </View>
-    </Modal>
+    </SheetModal>
   );
 }
 
 const styles = StyleSheet.create({
   eyebrow: { color: '#9aa9a1', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(33, 55, 46, 0.28)', justifyContent: 'flex-end' },
+  modalBackdrop: { flex: 1, justifyContent: 'flex-end' },
   modalCard: { maxHeight: '88%', backgroundColor: '#fff', borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 24 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   modalTitle: { color: '#29483d', fontSize: 21, fontWeight: '800', marginTop: 7 },

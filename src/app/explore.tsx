@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SheetModal } from '@/components/sheet-modal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { loadAppData, type HousingApplication } from '@/data/storage';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -59,7 +60,7 @@ export default function ApplicationsScreen() {
           {visibleItems.length === 0 ? <View style={styles.emptyCard}><Text style={styles.emptyIcon}>✓</Text><Text style={styles.emptyTitle}>{showChangedOnly ? '변동된 신청이 없어요' : '아직 신청 내역이 없어요'}</Text><Text style={styles.emptyText}>{showChangedOnly ? '모든 신청 내역이 이전 확인과 동일해요.' : '홈에서 신청 내역을 추가하면 이곳에서 관리할 수 있어요.'}</Text></View> : visibleItems.map((item) => <Pressable key={item.id} style={({ pressed }) => [styles.card, pressed && styles.cardPressed]} onPress={() => setSelectedItem(item)}><View style={[styles.icon, { backgroundColor: item.color }]}><Text style={styles.iconText}>{item.initials}</Text></View><View style={styles.cardBody}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.cardMeta}>{item.type}</Text><Text style={styles.cardMeta}>{item.area}</Text><View style={styles.bottom}><Text style={styles.rank}>{item.rank}번</Text><Text style={item.rank < item.previousRank ? styles.up : styles.same}>{item.rank < item.previousRank ? `↓ ${item.previousRank - item.rank}계단` : '변동 없음'}</Text><Text style={styles.updated}>{item.updatedAt}</Text></View></View><Text style={styles.arrow}>›</Text></Pressable>)}
           <Pressable style={({ pressed }) => [styles.tip, pressed && styles.cardPressed]} onPress={() => router.replace('/')}><Text style={styles.tipIcon}>✦</Text><View><Text style={styles.tipTitle}>신청 내역을 관리하려면</Text><Text style={styles.tipText}>홈으로 이동해 신청 내역을 추가하거나 수정할 수 있어요.</Text></View><Text style={styles.tipArrow}>›</Text></Pressable>
         </ScrollView>
-      {selectedItem && <Modal visible transparent animationType="slide" onRequestClose={() => setSelectedItem(undefined)}>
+      {selectedItem && <SheetModal visible onRequestClose={() => setSelectedItem(undefined)}>
         <View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setSelectedItem(undefined)} accessibilityLabel="닫기" />
           <View style={[styles.detailModal, { paddingBottom: 34 + sheetInset }]}>
             <View style={styles.modalHeader}><View><Text style={styles.eyebrow}>APPLICATION DETAIL</Text><Text style={styles.modalTitle}>신청 내역 상세</Text></View><Pressable onPress={() => setSelectedItem(undefined)}><Text style={styles.closeText}>×</Text></Pressable></View>
@@ -71,7 +72,7 @@ export default function ApplicationsScreen() {
             <Pressable style={styles.manageButton} onPress={() => { setSelectedItem(undefined); router.replace('/'); }}><Text style={styles.manageButtonText}>홈에서 수정·순번 관리하기  →</Text></Pressable>
           </View>
         </View>
-      </Modal>}
+      </SheetModal>}
     </SafeAreaView>
   );
 }
@@ -116,7 +117,7 @@ const styles = StyleSheet.create({
   tipTitle: { color: '#527662', fontSize: 12, fontWeight: '800' },
   tipText: { color: '#809188', fontSize: 11, marginTop: 3 },
   tipArrow: { color: '#72a18d', fontSize: 24, marginLeft: 'auto' },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(33, 55, 46, 0.28)', justifyContent: 'flex-end' },
+  modalBackdrop: { flex: 1, justifyContent: 'flex-end' },
   detailModal: { backgroundColor: '#fff', borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 24, paddingBottom: 34 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   modalTitle: { color: '#29483d', fontSize: 21, fontWeight: '800', marginTop: 7 },
