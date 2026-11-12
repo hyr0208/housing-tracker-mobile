@@ -22,6 +22,7 @@ export default function ChecklistScreen() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isSuggestOpen, setIsSuggestOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<ChecklistTask>();
+  const [pickedTemplate, setPickedTemplate] = useState<ChecklistTemplateItem>();
   const [dialog, setDialog] = useState<DialogState | null>(null);
 
   const reload = useCallback(() => {
@@ -63,6 +64,7 @@ export default function ChecklistScreen() {
         detail: detail || '직접 추가한 준비 항목',
         done: false,
         ...(dueDate ? { dueDate } : {}),
+        ...(pickedTemplate ? { templateId: pickedTemplate.id } : {}),
       };
       updateTasks([...data.tasks, task]);
     }
@@ -72,6 +74,7 @@ export default function ChecklistScreen() {
   const closeAddSheet = () => {
     setIsAddOpen(false);
     setEditingTask(undefined);
+    setPickedTemplate(undefined);
   };
 
   const openEdit = (task: ChecklistTask) => {
@@ -81,15 +84,13 @@ export default function ChecklistScreen() {
 
   const addedTemplateIds = useMemo(() => new Set(data.tasks.map((task) => task.templateId).filter((id): id is string => Boolean(id))), [data.tasks]);
 
-  const addTemplates = (items: ChecklistTemplateItem[]) => {
-    const now = Date.now();
-    const added = items
-      .filter((item) => !addedTemplateIds.has(item.id))
-      .map((item, index): ChecklistTask => ({ id: `task-${now + index}`, title: item.title, detail: item.detail, done: false, templateId: item.id }));
-    if (added.length) updateTasks([...data.tasks, ...added]);
+  // 추천 항목을 고르면 추가 시트에 채워 연다. iOS는 모달 두 개를 겹쳐 띄우지 못해서 추천 시트가 닫힌 뒤 연다.
+  const pickTemplate = (item: ChecklistTemplateItem) => {
+    setIsSuggestOpen(false);
+    setPickedTemplate(item);
+    setTimeout(() => setIsAddOpen(true), 400);
   };
 
-  // iOS는 모달 두 개를 겹쳐 띄우지 못해서, 추가 시트가 닫힌 뒤 추천 시트를 연다.
   const openSuggestionsFromAdd = () => {
     closeAddSheet();
     setTimeout(() => setIsSuggestOpen(true), 400);
@@ -119,8 +120,8 @@ export default function ChecklistScreen() {
           : visibleTasks.length === 0 ? <Pressable style={({ pressed }) => [styles.emptyCard, pressed && filter !== 'done' && styles.emptyCardPressed]} disabled={filter === 'done'} onPress={() => setIsAddOpen(true)} accessibilityRole="button"><Text style={styles.emptyIcon}>{filter === 'done' ? '✓' : '＋'}</Text><Text style={styles.emptyTitle}>{filter === 'done' ? '아직 완료한 일이 없어요' : filter === 'active' ? '모든 준비를 끝냈어요' : '체크리스트가 비어 있어요'}</Text><Text style={styles.emptyText}>{filter === 'done' ? '할 일을 완료하면 여기에 모여요.' : '여기를 눌러 필요한 준비 항목을 추가해보세요.'}</Text></Pressable> : <View style={styles.taskList}>{visibleTasks.map((task, index) => <View key={task.id} style={[styles.taskRow, task.done && styles.taskRowDone]}><Pressable style={styles.taskMain} onPress={() => toggleTask(task.id)} onLongPress={() => openEdit(task)} accessibilityHint="길게 누르면 수정하거나 마감일을 넣을 수 있어요"><View style={[styles.checkbox, task.done && styles.checkboxDone]}>{task.done && <Text style={styles.checkMark}>✓</Text>}</View><View style={styles.taskCopy}><Text style={[styles.taskTitle, task.done && styles.taskTitleDone]}>{task.title}</Text><Text style={styles.taskDetail}>{task.detail}</Text>{task.dueDate && (() => { const due = formatTaskDue(task.dueDate); return <Text style={[styles.taskDue, due.overdue && !task.done && styles.taskDueOverdue]}>{due.label}</Text>; })()}</View></Pressable><Pressable style={styles.deleteButton} onPress={() => deleteTask(task)}><Text style={styles.deleteText}>×</Text></Pressable></View>)}</View>}
         </ScrollView>
 
-      <AddTaskSheet visible={isAddOpen} onClose={closeAddSheet} onAdd={addTask} editing={editingTask} onOpenSuggestions={openSuggestionsFromAdd} />
-      <ChecklistSuggestSheet visible={isSuggestOpen} onClose={() => setIsSuggestOpen(false)} addedIds={addedTemplateIds} onAdd={addTemplates} />
+      <AddTaskSheet visible={isAddOpen} onClose={closeAddSheet} onAdd={addTask} editing={editingTask} prefill={pickedTemplate} onOpenSuggestions={openSuggestionsFromAdd} />
+      <ChecklistSuggestSheet visible={isSuggestOpen} onClose={() => setIsSuggestOpen(false)} addedIds={addedTemplateIds} onPick={pickTemplate} />
 
       <Modal visible={Boolean(dialog)} transparent animationType="fade" onRequestClose={() => setDialog(null)}>
         <View style={styles.dialogBackdrop}><View style={styles.dialogCard}><View style={styles.dialogIcon}><Text style={styles.dialogIconText}>!</Text></View><Text style={styles.dialogTitle}>{dialog?.title}</Text><Text style={styles.dialogMessage}>{dialog?.message}</Text><View style={styles.dialogActions}><Pressable style={styles.dialogCancelButton} onPress={() => setDialog(null)}><Text style={styles.dialogCancelText}>취소</Text></Pressable><Pressable style={styles.dialogConfirmButton} onPress={() => { const action = dialog?.onConfirm; setDialog(null); action?.(); }}><Text style={styles.dialogConfirmText}>삭제</Text></Pressable></View></View></View>

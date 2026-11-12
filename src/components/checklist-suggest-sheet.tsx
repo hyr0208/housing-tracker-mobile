@@ -7,11 +7,11 @@ type Props = {
   onClose: () => void;
   /** 이미 추가한 추천 항목 ID */
   addedIds: Set<string>;
-  onAdd: (items: ChecklistTemplateItem[]) => void;
+  onPick: (item: ChecklistTemplateItem) => void;
 };
 
-// 단계별 추천 체크리스트. 하나씩 또는 단계 전체를 골라 내 체크리스트에 넣는다(자동으로 넣지 않는다).
-export function ChecklistSuggestSheet({ visible, onClose, addedIds, onAdd }: Props) {
+// 단계별 추천 체크리스트. 고른 항목은 바로 넣지 않고 '준비할 일 추가' 시트에 채워서, 마감일을 고르거나 고친 뒤 저장하게 한다.
+export function ChecklistSuggestSheet({ visible, onClose, addedIds, onPick }: Props) {
   const sheetInset = useSheetBottomInset();
 
   return (
@@ -20,7 +20,7 @@ export function ChecklistSuggestSheet({ visible, onClose, addedIds, onAdd }: Pro
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="닫기" />
         <View style={[styles.modalCard, { paddingBottom: 24 + sheetInset }]}>
           <View style={styles.modalHeader}><View><Text style={styles.eyebrow}>SUGGESTIONS</Text><Text style={styles.modalTitle}>추천 체크리스트</Text></View><Pressable onPress={onClose}><Text style={styles.closeText}>×</Text></Pressable></View>
-          <Text style={styles.modalCopy}>필요한 것만 골라 담아요. 서류와 순서는 공급기관·유형마다 다를 수 있으니 공고문에서 꼭 확인해 주세요.</Text>
+          <Text style={styles.modalCopy}>항목을 고르면 추가 화면에서 내용을 고치고 마감일을 정할 수 있어요. 서류와 순서는 공급기관·유형마다 다를 수 있으니 공고문에서 꼭 확인해 주세요.</Text>
           <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
             {CHECKLIST_TEMPLATES.map((stage, stageIndex) => {
               const remaining = stage.items.filter((item) => !addedIds.has(item.id));
@@ -28,15 +28,15 @@ export function ChecklistSuggestSheet({ visible, onClose, addedIds, onAdd }: Pro
                 <View key={stage.key} style={styles.stage}>
                   <View style={styles.stageHeader}>
                     <View style={styles.stageTitle}><Text style={styles.stageNumber}>{stageIndex + 1}</Text><Text style={styles.stageLabel}>{stage.label}</Text></View>
-                    {remaining.length > 0 ? <Pressable onPress={() => onAdd(remaining)}><Text style={styles.stageAdd}>단계 전체 추가</Text></Pressable> : <Text style={styles.stageDone}>모두 추가됨</Text>}
+                    {remaining.length === 0 && <Text style={styles.stageDone}>모두 추가됨</Text>}
                   </View>
                   <View style={styles.stageCard}>
                   {stage.items.map((item, itemIndex) => {
                     const added = addedIds.has(item.id);
                     return (
-                      <Pressable key={item.id} style={[styles.itemRow, itemIndex === stage.items.length - 1 && styles.itemRowLast]} disabled={added} onPress={() => onAdd([item])}>
+                      <Pressable key={item.id} style={[styles.itemRow, itemIndex === stage.items.length - 1 && styles.itemRowLast]} disabled={added} onPress={() => onPick(item)}>
                         <View style={styles.itemCopy}><Text style={[styles.itemTitle, added && styles.itemTitleAdded]}>{item.title}</Text><Text style={styles.itemDetail}>{item.detail}</Text></View>
-                        <Text style={[styles.itemAction, added && styles.itemActionAdded]}>{added ? '추가됨' : '＋'}</Text>
+                        <Text style={[styles.itemAction, added && styles.itemActionAdded]}>{added ? '추가됨' : '›'}</Text>
                       </Pressable>
                     );
                   })}
@@ -65,7 +65,6 @@ const styles = StyleSheet.create({
   stageTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   stageNumber: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#327e67', color: '#fff', fontSize: 12, fontWeight: '800', textAlign: 'center', lineHeight: 22, overflow: 'hidden' },
   stageLabel: { color: '#243b34', fontSize: 17, fontWeight: '800' },
-  stageAdd: { color: '#3f8a72', fontSize: 12, fontWeight: '800', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, backgroundColor: '#e4f3ec', overflow: 'hidden' },
   stageCard: { borderRadius: 14, backgroundColor: '#f6faf7', borderWidth: 1, borderColor: '#e4ece7', paddingHorizontal: 13 },
   stageDone: { color: '#a0ada6', fontSize: 12, fontWeight: '700' },
   itemRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#e6eee9' },

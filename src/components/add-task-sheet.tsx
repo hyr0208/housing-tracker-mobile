@@ -10,11 +10,13 @@ type Props = {
   onAdd: (title: string, detail: string, dueDate?: string) => void;
   /** 넘기면 이 항목을 고치는 시트로 연다. */
   editing?: ChecklistTask;
+  /** 추천 항목에서 고른 내용으로 채워서 연다. */
+  prefill?: { title: string; detail: string };
   onOpenSuggestions?: () => void;
 };
 
 // 홈과 체크리스트 탭에서 함께 쓰는 '준비할 일 추가' 바텀시트. 마감일을 넣으면 하루 전과 당일 오전 9시에 알려준다.
-export function AddTaskSheet({ visible, onClose, onAdd, editing, onOpenSuggestions }: Props) {
+export function AddTaskSheet({ visible, onClose, onAdd, editing, prefill, onOpenSuggestions }: Props) {
   const sheetInset = useSheetBottomInset();
   const [draftTitle, setDraftTitle] = useState('');
   const [draftDetail, setDraftDetail] = useState('');
@@ -23,11 +25,12 @@ export function AddTaskSheet({ visible, onClose, onAdd, editing, onOpenSuggestio
 
   useEffect(() => {
     if (!visible) return;
-    setDraftTitle(editing?.title ?? '');
-    setDraftDetail(editing?.detail ?? '');
+    setDraftTitle(editing?.title ?? prefill?.title ?? '');
+    setDraftDetail(editing?.detail ?? prefill?.detail ?? '');
     setDueDate(editing?.dueDate);
-    setShowCalendar(false);
-  }, [visible, editing]);
+    // 추천에서 골랐다면 바로 마감일을 정할 수 있게 달력을 펼친다.
+    setShowCalendar(Boolean(prefill));
+  }, [visible, editing, prefill]);
 
   const submit = () => {
     const title = draftTitle.trim();
@@ -46,9 +49,9 @@ export function AddTaskSheet({ visible, onClose, onAdd, editing, onOpenSuggestio
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <View style={styles.modalHeader}><View><Text style={styles.eyebrow}>{editing ? 'EDIT CHECKLIST ITEM' : 'NEW CHECKLIST ITEM'}</Text><Text style={styles.modalTitle}>{editing ? '준비할 일 수정' : '준비할 일 추가'}</Text></View><Pressable onPress={onClose}><Text style={styles.closeText}>×</Text></Pressable></View>
             <Text style={styles.modalCopy}>입주 준비에 필요한 일을 직접 기록해두세요. 마감일을 넣으면 하루 전과 당일 오전 9시에 알려드려요.</Text>
-            {!editing && onOpenSuggestions && <Pressable style={styles.suggestButton} onPress={onOpenSuggestions}><Text style={styles.suggestText}>뭐부터 할지 모르겠다면 · 추천 항목에서 고르기 ›</Text></Pressable>}
+            {!editing && !prefill && onOpenSuggestions && <Pressable style={styles.suggestButton} onPress={onOpenSuggestions}><Text style={styles.suggestText}>뭐부터 할지 모르겠다면 · 추천 항목에서 고르기 ›</Text></Pressable>}
             <Text style={styles.inputLabel}>할 일</Text>
-            <TextInput value={draftTitle} onChangeText={setDraftTitle} placeholder="예: 주민등록 이전 준비" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus={!editing} />
+            <TextInput value={draftTitle} onChangeText={setDraftTitle} placeholder="예: 주민등록 이전 준비" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus={!editing && !prefill} />
             <Text style={styles.inputLabel}>메모 (선택)</Text>
             <TextInput value={draftDetail} onChangeText={setDraftDetail} placeholder="예: 필요한 서류를 확인해요" placeholderTextColor="#a9b4ae" style={styles.input} />
             <View style={styles.dueHeader}>
