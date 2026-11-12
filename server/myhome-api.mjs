@@ -225,6 +225,11 @@ function getNameCandidates(complexName) {
   return candidates.filter(Boolean);
 }
 
+// 마이홈은 공급 단위(drwtUnit)가 없을 때 빈 문자열 대신 공백(' ')을 보내므로, 공백이면 주택형(styleNm)을 쓴다.
+export function housingTypeOf(row) {
+  return String(row.drwtUnit ?? '').trim() || String(row.styleNm ?? '').trim() || '주택형 미상';
+}
+
 export function findMatchingRows(rows, { complexName, suplyTy, houseTy, housingType }) {
   const nameCandidates = getNameCandidates(complexName);
   if (nameCandidates.length === 0) return [];
@@ -265,7 +270,7 @@ export function searchComplexRows(rows, { keyword, brtcCode }) {
       housingTypes: [],
     };
 
-    [row.drwtUnit, row.styleNm].filter(Boolean).forEach((label) => {
+    [row.drwtUnit, row.styleNm].map((label) => String(label ?? '').trim()).filter(Boolean).forEach((label) => {
       if (!existing.housingTypes.includes(label)) existing.housingTypes.push(label);
     });
     results.set(key, existing);

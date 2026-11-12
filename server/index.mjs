@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fetchAllWaitingRows, findMatchingRows, searchComplexRows, useWaitingRowsCacheFile, warmAllWaitingRows } from './myhome-api.mjs';
+import { fetchAllWaitingRows, findMatchingRows, housingTypeOf, searchComplexRows, useWaitingRowsCacheFile, warmAllWaitingRows } from './myhome-api.mjs';
 import { fetchVacancyStatus } from './lh-vacancy-api.mjs';
 import { createSessionToken, exchangeAuthorizationCode, revokeAppleToken, verifyAppleIdentityToken, verifySessionToken } from './apple-auth.mjs';
 import { verifyReviewAccount } from './review-auth.mjs';
@@ -149,12 +149,12 @@ async function syncApplication(application) {
   }
 
   const row = matches[0];
-  const housingTypeLabel = incoming.housingType || row.drwtUnit || row.styleNm;
+  const housingTypeLabel = incoming.housingType || housingTypeOf(row);
   const housingTypeText = housingTypeLabel ? `${housingTypeLabel}${String(housingTypeLabel).endsWith('형') ? '' : '형'}` : '공개 대기인원';
   const nextWaitCount = Number(row.waitCo ?? 0);
   const publicMoveOutCount = Number(row.trmnatCo ?? 0);
   const publicWaitBreakdown = allMatches.reduce((groups, item) => {
-    const label = item.drwtUnit || item.styleNm || '주택형 미상';
+    const label = housingTypeOf(item);
     const existing = groups.find((group) => group.label === label);
     // trmnatCo는 마이홈이 공개하는 최근 1년 퇴거(계약 해지) 세대 수다.
     if (existing) {
@@ -485,7 +485,7 @@ const server = http.createServer(async (request, response) => {
         };
         const count = Number(row.waitCo ?? 0);
         complex.totalWait += count;
-        complex.types.push({ label: row.drwtUnit || row.styleNm || '주택형 미상', count });
+        complex.types.push({ label: housingTypeOf(row), count, moveOut: Number(row.trmnatCo ?? 0) });
         complexes.set(id, complex);
       }
       const list = [...complexes.values()].sort((a, b) => a.totalWait - b.totalWait || a.complexName.localeCompare(b.complexName, 'ko'));

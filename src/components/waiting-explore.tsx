@@ -82,7 +82,7 @@ export function WaitingExplore() {
                   <View style={styles.waitBox}><Text style={[styles.waitCount, complex.totalWait === 0 && styles.waitZero]}>{complex.totalWait === 0 ? '없음' : complex.totalWait}</Text><Text style={styles.waitLabel}>{complex.totalWait === 0 ? '대기' : '명 대기'}</Text></View>
                 </View>
                 {isOpen && <View style={styles.detail}>
-                  {complex.types.map((type, index) => <View key={`${type.label}-${index}`} style={styles.typeRow}><Text style={styles.typeLabel}>{type.label}{/^\d/.test(type.label) ? '형' : ''}</Text><Text style={styles.typeCount}>{type.count}명</Text></View>)}
+                  {complex.types.map((type, index) => <View key={`${type.label}-${index}`} style={styles.typeRow}><Text style={styles.typeLabel}>{/^\d+(\.\d+)?$/.test(type.label) ? Number(type.label) : type.label}{/^\d/.test(type.label) ? '형' : ''}</Text><Text style={styles.typeCount}>{type.count}명{type.moveOut !== undefined && <Text style={styles.typeMoveOut}>  · 1년 퇴거 {type.moveOut}</Text>}</Text></View>)}
                   {complex.address && <Text style={styles.address}>{complex.address}</Text>}
                   <Text style={styles.institution}>{complex.institution} · 대기 0명은 예비입주자가 모두 입주했거나 아직 모집 전이라는 뜻이에요.</Text>
                 </View>}
@@ -125,6 +125,7 @@ const styles = StyleSheet.create({
   typeRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   typeLabel: { color: '#61736a', fontSize: 13, fontWeight: '700' },
   typeCount: { color: '#4b927a', fontSize: 13, fontWeight: '800' },
+  typeMoveOut: { color: '#8a948f', fontSize: 11, fontWeight: '600' },
   address: { color: '#8f9e96', fontSize: 12, marginTop: 8 },
   institution: { color: '#a9b4ae', fontSize: 11, marginTop: 6, lineHeight: 17 },
   more: { alignItems: 'center', paddingVertical: 12 },

@@ -7,7 +7,7 @@ export type ExploreComplex = {
   supplyType: string;
   institution: string;
   totalWait: number;
-  types: { label: string; count: number }[];
+  types: { label: string; count: number; moveOut?: number }[];
 };
 
 // 마이홈 대기현황 API의 광역시도 코드
