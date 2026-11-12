@@ -85,6 +85,14 @@ function toPushNotification(push: Notifications.Notification): AppNotification {
   };
 }
 
+// 홈 인사말을 시간대에 맞춘다. 아침 5~11시, 오후 11~17시, 저녁 17~22시, 그 외는 밤.
+function greetingFor(hour: number) {
+  if (hour >= 5 && hour < 11) return '좋은 아침이에요';
+  if (hour >= 11 && hour < 17) return '좋은 오후예요';
+  if (hour >= 17 && hour < 22) return '편안한 저녁이에요';
+  return '오늘도 수고했어요';
+}
+
 // 알림 시각을 "5분 전", "어제 오후 3:20", "11월 9일 오후 3:20"처럼 보여준다.
 // 예전 알림은 시각 대신 "방금 전"이나 만든 때의 날짜 글자를 저장해 두었으므로, 알 수 있으면 ID의 시각을 쓰고 아니면 그대로 보여준다.
 function formatNotificationTime(item: AppNotification, now = new Date()) {
@@ -826,7 +834,7 @@ export default function HomeScreen() {
 
           <View style={styles.greetingBlock}>
             <Text style={styles.dateLabel}>{weekday.toUpperCase()}</Text>
-            <Text style={styles.greeting}>좋은 아침이에요{profileName ? `, ${profileName}님` : ''} <Text style={styles.star}>✦</Text></Text>
+            <Text style={styles.greeting}>{greetingFor(new Date().getHours())}{profileName ? `, ${profileName}님` : ''} <Text style={styles.star}>✦</Text></Text>
             <Text style={styles.greetingSub}>오늘도 내 차례에 한 걸음 가까워지고 있어요.</Text>
           </View>
 
