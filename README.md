@@ -4,7 +4,7 @@
 
 <p>
   <a href="https://play.google.com/store/apps/details?id=kr.co.uulab.housingtracker"><img src="https://img.shields.io/badge/Google%20Play-출시-3B8068?logo=googleplay&logoColor=white" alt="Google Play" /></a>
-  <img src="https://img.shields.io/badge/App%20Store-심사%20중-8E9A94?logo=appstore&logoColor=white" alt="App Store 심사 중" />
+  <a href="https://apps.apple.com/kr/app/id6824419011"><img src="https://img.shields.io/badge/App%20Store-출시-3B8068?logo=appstore&logoColor=white" alt="App Store" /></a>
   <img src="https://img.shields.io/badge/Expo-57-000020?logo=expo&logoColor=white" alt="Expo 57" />
   <img src="https://img.shields.io/badge/React%20Native-0.86-61DAFB?logo=react&logoColor=111" alt="React Native 0.86" />
   <img src="https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
@@ -18,7 +18,7 @@
 | 플랫폼 | 링크 |
 | --- | --- |
 | Android | [Google Play에서 받기](https://play.google.com/store/apps/details?id=kr.co.uulab.housingtracker) |
-| iOS | App Store 심사 중 (출시 후 [App Store 링크](https://apps.apple.com/kr/app/id6824419011)) |
+| iOS | [App Store에서 받기](https://apps.apple.com/kr/app/id6824419011) |
 
 - 개인정보처리방침: https://housing-api.yyyerin.co.kr/privacy
 - 계정 삭제 안내: https://housing-api.yyyerin.co.kr/account-deletion
@@ -30,8 +30,8 @@
 | 로그인 | 카카오·Apple 로그인으로 신청 내역과 알림 설정을 계정에 저장하고 다른 기기에서 불러옵니다. |
 | 신청 내역 관리 | 공식 공고·단지를 검색해 등록하고, 길게 눌러 삭제합니다. |
 | 순번 기록과 그래프 | 예비순번을 날짜별로 기록(지난 순번 직접 입력 포함)하고 순번·대기인원 변화를 그래프로 보여줍니다. |
-| 내 차례 예상 시기 | 순번 기록이나 공개 대기인원이 줄어든 속도로 차례가 올 시기를 추정합니다. |
-| 공개 대기현황 | 마이홈 공공 API의 단지·주택형별 대기인원을 보여주고, 변동되면 푸시로 알립니다. |
+| 내 차례 예상 시기 | 순번 기록, 최근 1년 퇴거 세대 수, 공개 대기인원이 줄어든 속도 순으로 차례가 올 시기를 추정합니다. |
+| 공개 대기현황 | 마이홈 공공 API의 단지·주택형별 대기인원과 최근 1년 퇴거 세대 수를 보여주고, 대기인원이 변동되면 푸시로 알립니다. |
 | 공가현황 · 단지 정보 | LH 부동산맵의 주택형별 공가, 세대수, 입주 시기, 지난 모집공고를 보여줍니다. |
 | 모집공고 | 진행 중인 공공임대 공고를 지역·유형별로 보고, 최신순·마감 임박순·접수 시작순으로 정렬합니다. 조건에 맞는 새 공고는 푸시로 알립니다. |
 | 단지별 대기현황 | 지역의 단지를 대기인원이 적은 순으로 비교합니다. |
