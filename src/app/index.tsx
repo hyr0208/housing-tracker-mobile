@@ -26,13 +26,16 @@ import {
   saveLocalAppData,
   type AppData,
   type AppNotification,
+  type ChecklistTask,
   type HousingApplication,
   type RankSnapshot,
   type UserProfile,
 } from '@/data/storage';
 import { AddTaskSheet } from '@/components/add-task-sheet';
+import { ChecklistSuggestSheet } from '@/components/checklist-suggest-sheet';
+import type { ChecklistTemplateItem } from '@/data/checklist-templates';
 import { AddEventSheet } from '@/components/add-event-sheet';
-import { formatDday, formatEventDate, kindLabel, syncScheduleReminders, syncTaskReminders, upcomingEvents } from '@/services/schedule';
+import { formatDday, formatEventDate, formatTaskDue, kindLabel, syncScheduleReminders, syncTaskReminders, upcomingEvents } from '@/services/schedule';
 import { TrendChart } from '@/components/trend-chart';
 import { RankHistorySheet } from '@/components/rank-history-sheet';
 import { ComplexInfoPanel } from '@/components/complex-info';
@@ -197,6 +200,10 @@ export default function HomeScreen() {
   const [isRankOpen, setIsRankOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
+  // 체크리스트 탭과 같은 방식: 추천에서 고르면 추가 시트에 채우고, 길게 누르면 수정한다.
+  const [isSuggestOpen, setIsSuggestOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<ChecklistTask>();
+  const [pickedTemplate, setPickedTemplate] = useState<ChecklistTemplateItem>();
   const [isAddEventOpen, setIsAddEventOpen] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -678,6 +685,12 @@ export default function HomeScreen() {
     });
   };
 
+  const closeAddTask = () => {
+    setIsAddTaskOpen(false);
+    setEditingTask(undefined);
+    setPickedTemplate(undefined);
+  };
+
   const deleteApplication = (applicationId: string) => {
     const application = applications.find((item) => item.id === applicationId);
     if (!application) return;
@@ -883,7 +896,7 @@ export default function HomeScreen() {
           <View style={styles.taskCard}>{upcoming.length === 0 ? <Pressable style={styles.eventEmpty} onPress={() => setIsAddEventOpen(true)}><Text style={styles.eventEmptyText}>서류 마감일이나 계약일을 추가하면 하루 전에 알려드려요. 공고 탭에서 접수일을 바로 추가할 수도 있어요.</Text></Pressable> : upcoming.slice(0, 4).map((event, index) => <Pressable key={event.id} onLongPress={() => deleteEvent(event.id)} onPress={() => { if (event.url) void Linking.openURL(event.url); }} style={[styles.eventRow, index === Math.min(upcoming.length, 4) - 1 && styles.eventRowLast]} accessibilityHint="길게 누르면 삭제할 수 있어요"><View style={styles.eventDday}><Text style={styles.eventDdayText}>{formatDday(event)}</Text></View><View style={styles.taskText}><Text style={styles.taskTitle} numberOfLines={1}>{event.title}</Text><Text style={styles.eventMeta}>{kindLabel(event.kind)} · {formatEventDate(event)}{event.url ? '  ↗' : ''}</Text></View></Pressable>)}{upcoming.length > 4 && <Text style={styles.eventMore}>외 {upcoming.length - 4}개 일정</Text>}</View>
 
           <View style={styles.lowerHeader}><View><Text style={styles.cardEyebrow}>NEXT STEPS</Text><Text style={styles.sectionTitle}>준비할 일 <Text style={styles.taskCount}>{completed}/{tasks.length}</Text></Text></View><Pressable onPress={() => setIsAddTaskOpen(true)}><Text style={styles.moreText}>할 일 추가  ＋</Text></Pressable></View>
-          <View style={styles.taskCard}>{tasks.map((task) => <Pressable key={task.id} onPress={() => toggleTask(task.id)} style={styles.taskRow}><View style={[styles.checkbox, task.done && styles.checkboxDone]}>{task.done && <Text style={styles.checkMark}>✓</Text>}</View><View style={styles.taskText}><Text style={[styles.taskTitle, task.done && styles.taskDone]}>{task.title}</Text><Text style={styles.taskDetail}>{task.detail}</Text></View></Pressable>)}</View>
+          <View style={styles.taskCard}>{tasks.map((task) => <Pressable key={task.id} onPress={() => toggleTask(task.id)} onLongPress={() => { setEditingTask(task); setIsAddTaskOpen(true); }} style={styles.taskRow}><View style={[styles.checkbox, task.done && styles.checkboxDone]}>{task.done && <Text style={styles.checkMark}>✓</Text>}</View><View style={styles.taskText}><Text style={[styles.taskTitle, task.done && styles.taskDone]}>{task.title}</Text><Text style={styles.taskDetail}>{task.detail}</Text>{task.dueDate && (() => { const due = formatTaskDue(task.dueDate); return <Text style={[styles.taskDue, due.overdue && !task.done && styles.taskDueOverdue]}>{due.label}</Text>; })()}</View></Pressable>)}</View>
 
           <View style={styles.tipBanner}><View style={styles.tipCircle}><Text style={styles.tipSpark}>✦</Text></View><View style={{ flex: 1 }}><Text style={styles.tipTitle}>이번 주의 팁</Text><Text style={styles.tipBody}>순번이 20번대라면 서류를 미리 준비해두세요.</Text></View><Chevron /></View>
           </> : <View style={styles.guestCard}>
@@ -1009,10 +1022,14 @@ export default function HomeScreen() {
         <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsRankOpen(false)} accessibilityLabel="닫기" /><View style={[styles.modalCard, { paddingBottom: 36 + sheetInset }]}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>UPDATE RANK</Text><Text style={styles.modalTitle}>현재 순번 기록</Text></View><Pressable onPress={() => setIsRankOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View><Text style={styles.modalCopy}>{selected.title}의 공고문이나 대기현황에서 확인한 최신 순번을 입력하세요.</Text><Text style={styles.inputLabel}>현재 예비순번</Text><TextInput value={draftRank} onChangeText={setDraftRank} keyboardType="number-pad" placeholder="예: 24" placeholderTextColor="#a9b4ae" style={styles.input} autoFocus /><Pressable onPress={() => void Linking.openURL(LH_APPLY_URL)} style={styles.lhLink}><Text style={styles.lhLinkText}>LH청약플러스에서 내 순번 확인하기 ↗</Text></Pressable><View style={styles.historyHeader}><Text style={styles.historyTitle}>최근 순번 이력</Text><Pressable onPress={() => { setIsRankOpen(false); setIsHistoryOpen(true); }} hitSlop={8}><Text style={styles.historyManage}>지난 기록 추가 ›</Text></Pressable></View><View style={styles.historyList}>{selected.history.slice(-3).reverse().map((snapshot) => <View key={`${snapshot.recordedAt}-${snapshot.rank}`} style={styles.historyRow}><Text style={styles.historyDate}>{snapshot.recordedAt}</Text><Text style={styles.historyRank}>{snapshot.rank}번</Text></View>)}</View><Pressable style={styles.saveButton} onPress={saveRank}><Text style={styles.saveButtonText}>순번 업데이트 저장  →</Text></Pressable></View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
       </Modal>}
 
-      <AddTaskSheet visible={isAddTaskOpen} onClose={() => setIsAddTaskOpen(false)} onAdd={(title, detail, dueDate) => {
-        updateData({ ...data, tasks: [...tasks, { id: `task-${Date.now()}`, title, detail: detail || '직접 추가한 준비 항목', done: false, ...(dueDate ? { dueDate } : {}) }] });
-        setIsAddTaskOpen(false);
+      <AddTaskSheet visible={isAddTaskOpen} onClose={closeAddTask} editing={editingTask} prefill={pickedTemplate} onOpenSuggestions={() => { closeAddTask(); setTimeout(() => setIsSuggestOpen(true), 400); }} onAdd={(title, detail, dueDate) => {
+        const nextTasks = editingTask
+          ? tasks.map((task) => task.id === editingTask.id ? { ...task, title, detail: detail || task.detail, dueDate } : task)
+          : [...tasks, { id: `task-${Date.now()}`, title, detail: detail || '직접 추가한 준비 항목', done: false, ...(dueDate ? { dueDate } : {}), ...(pickedTemplate ? { templateId: pickedTemplate.id } : {}) }];
+        updateData({ ...data, tasks: nextTasks });
+        closeAddTask();
       }} />
+      <ChecklistSuggestSheet visible={isSuggestOpen} onClose={() => setIsSuggestOpen(false)} addedIds={new Set(tasks.map((task) => task.templateId).filter((id): id is string => Boolean(id)))} onPick={(item) => { setIsSuggestOpen(false); setPickedTemplate(item); setTimeout(() => setIsAddTaskOpen(true), 400); }} />
 
       {selected && <RankHistorySheet visible={isHistoryOpen} history={selected.history} onClose={() => setIsHistoryOpen(false)} onSave={saveRankHistory} />}
 
@@ -1189,6 +1206,8 @@ const styles = StyleSheet.create({
   taskTitle: { color: '#55645d', fontSize: 13, fontWeight: '700' },
   taskDone: { color: '#aeb7b1', textDecorationLine: 'line-through' },
   taskDetail: { color: '#a7b1ab', fontSize: 11, marginTop: 4 },
+  taskDue: { alignSelf: 'flex-start', marginTop: 5, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: '#eef7f2', color: '#3f8a72', fontSize: 11, fontWeight: '800', overflow: 'hidden' },
+  taskDueOverdue: { backgroundColor: '#fbebe6', color: '#d47d6c' },
   urgentDot: { width: 6, height: 6, borderRadius: 4, backgroundColor: '#ee9a75' },
   tipBanner: { marginHorizontal: 16, marginTop: 18, backgroundColor: '#f0f7ee', borderRadius: 15, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
   tipCircle: { width: 29, height: 29, borderRadius: 10, backgroundColor: '#dcecdf', alignItems: 'center', justifyContent: 'center' },
