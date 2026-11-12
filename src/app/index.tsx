@@ -34,6 +34,7 @@ import {
 import { AddTaskSheet } from '@/components/add-task-sheet';
 import { ChecklistSuggestSheet } from '@/components/checklist-suggest-sheet';
 import type { ChecklistTemplateItem } from '@/data/checklist-templates';
+import { tipOfWeek, type TipAction } from '@/data/home-tips';
 import { AddEventSheet } from '@/components/add-event-sheet';
 import { formatDday, formatEventDate, formatTaskDue, kindLabel, syncScheduleReminders, syncTaskReminders, upcomingEvents } from '@/services/schedule';
 import { TrendChart } from '@/components/trend-chart';
@@ -685,6 +686,15 @@ export default function HomeScreen() {
     });
   };
 
+  const weeklyTip = tipOfWeek();
+  const openTip = (action: TipAction) => {
+    if (action === 'suggest') setIsSuggestOpen(true);
+    else if (action === 'event') setIsAddEventOpen(true);
+    else if (action === 'history') { if (selected) setIsHistoryOpen(true); else router.navigate('/explore'); }
+    else if (action === 'checklist') router.navigate('/checklist');
+    else router.navigate({ pathname: '/notices', params: { mode: action === 'waiting' ? 'waiting' : 'notices', at: String(Date.now()) } });
+  };
+
   const closeAddTask = () => {
     setIsAddTaskOpen(false);
     setEditingTask(undefined);
@@ -898,7 +908,7 @@ export default function HomeScreen() {
           <View style={styles.lowerHeader}><View><Text style={styles.cardEyebrow}>NEXT STEPS</Text><Text style={styles.sectionTitle}>준비할 일 <Text style={styles.taskCount}>{completed}/{tasks.length}</Text></Text></View><Pressable onPress={() => setIsAddTaskOpen(true)}><Text style={styles.moreText}>할 일 추가  ＋</Text></Pressable></View>
           <View style={styles.taskCard}>{tasks.map((task) => <Pressable key={task.id} onPress={() => toggleTask(task.id)} onLongPress={() => { setEditingTask(task); setIsAddTaskOpen(true); }} style={styles.taskRow}><View style={[styles.checkbox, task.done && styles.checkboxDone]}>{task.done && <Text style={styles.checkMark}>✓</Text>}</View><View style={styles.taskText}><Text style={[styles.taskTitle, task.done && styles.taskDone]}>{task.title}</Text><Text style={styles.taskDetail}>{task.detail}</Text>{task.dueDate && (() => { const due = formatTaskDue(task.dueDate); return <Text style={[styles.taskDue, due.overdue && !task.done && styles.taskDueOverdue]}>{due.label}</Text>; })()}</View></Pressable>)}</View>
 
-          <View style={styles.tipBanner}><View style={styles.tipCircle}><Text style={styles.tipSpark}>✦</Text></View><View style={{ flex: 1 }}><Text style={styles.tipTitle}>이번 주의 팁</Text><Text style={styles.tipBody}>순번이 20번대라면 서류를 미리 준비해두세요.</Text></View><Chevron /></View>
+          <Pressable style={({ pressed }) => [styles.tipBanner, pressed && weeklyTip.action && { opacity: 0.7 }]} disabled={!weeklyTip.action} onPress={() => weeklyTip.action && openTip(weeklyTip.action)}><View style={styles.tipCircle}><Text style={styles.tipSpark}>✦</Text></View><View style={{ flex: 1 }}><Text style={styles.tipTitle}>이번 주의 팁</Text><Text style={styles.tipBody}>{weeklyTip.text}</Text></View>{weeklyTip.action && <Chevron />}</Pressable>
           </> : <View style={styles.guestCard}>
             <View style={styles.guestIcon}><Text style={styles.guestIconText}>♧</Text></View>
             <Text style={styles.guestTitle}>{isLoggedIn ? '신청 내역을 추가해보세요' : '내 신청을 안전하게 관리해요'}</Text>

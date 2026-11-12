@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -32,6 +33,13 @@ export default function NoticesScreen() {
     if (next === 'waiting') setHasOpenedWaiting(true);
     setMode(next);
   };
+
+  // 홈의 팁처럼 다른 화면에서 대기현황을 바로 열 때 쓴다. at은 같은 화면을 다시 열어도 반응하게 하는 값이다.
+  const params = useLocalSearchParams<{ mode?: string; at?: string }>();
+  useEffect(() => {
+    if (params.mode === 'waiting' || params.mode === 'notices') changeMode(params.mode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.mode, params.at]);
 
   const itemWidth = segmentWidth > 0 ? (segmentWidth - 6) / MODES.length : 0;
   // 폭은 일반 스타일로 넘긴다. 애니메이션 스타일 안에서 JS 값을 읽으면 릴리스 빌드에서 처음 폭이 반영되지 않아 표시가 안 보였다.
