@@ -382,7 +382,7 @@ export default function HomeScreen() {
   const logout = () => {
     const keepLocal = !isAccountReady();
     if (data.profile) void clearAccountSession(data.profile).catch(() => undefined);
-    updateData(keepLocal ? { ...data, profile: undefined } : defaultAppData);
+    updateData(keepLocal ? { ...data, profile: undefined, profileName: undefined } : defaultAppData);
     if (!keepLocal) setSelectedId(undefined);
     setIsProfileOpen(false);
   };
