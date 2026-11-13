@@ -20,6 +20,8 @@
 | Android | [Google Play에서 받기](https://play.google.com/store/apps/details?id=kr.co.uulab.housingtracker) |
 | iOS | [App Store에서 받기](https://apps.apple.com/kr/app/id6824419011) |
 
+- 소개 페이지: https://myturn.yyyerin.co.kr
+- 기기별 스토어 바로가기: https://myturn.yyyerin.co.kr/download (iPhone → App Store, Android → Google Play)
 - 개인정보처리방침: https://housing-api.yyyerin.co.kr/privacy
 - 계정 삭제 안내: https://housing-api.yyyerin.co.kr/account-deletion
 
@@ -34,9 +36,10 @@
 | 공개 대기현황 | 마이홈 공공 API의 단지·주택형별 대기인원과 최근 1년 퇴거 세대 수를 보여주고, 대기인원이 변동되면 푸시로 알립니다. |
 | 공가현황 · 단지 정보 | LH 부동산맵의 주택형별 공가, 세대수, 입주 시기, 지난 모집공고를 보여줍니다. |
 | 모집공고 | 진행 중인 공공임대 공고를 지역·유형별로 보고, 최신순·마감 임박순·접수 시작순으로 정렬합니다. 조건에 맞는 새 공고는 푸시로 알립니다. |
-| 단지별 대기현황 | 지역의 단지를 대기인원이 적은 순으로 비교합니다. |
+| 단지별 대기현황 | 지역의 단지를 대기인원이 적은 순으로 비교하고, 주택형별 대기인원과 1년 퇴거 세대 수를 보여줍니다. |
 | 일정 알림 | 접수·서류 마감·계약일을 추가하면 하루 전과 당일 오전 9시에 알립니다. |
-| 입주 준비 체크리스트 | 준비할 일을 추가하고 진행률을 확인합니다. |
+| 입주 준비 체크리스트 | 6단계 추천 항목에서 골라 추가하거나 직접 적고, 마감일을 넣으면 하루 전과 당일 오전 9시에 알립니다. 진행률을 확인합니다. |
+| 이번 주의 팁 | 홈에서 주마다 바뀌는 팁을 보여주고, 누르면 관련 화면으로 이동합니다. |
 
 ## 📱 화면 미리보기
 
@@ -101,7 +104,7 @@ housing-tracker-mobile/
 │   ├── lh-vacancy-api.mjs   # LH 부동산맵 공가 · 단지 정보
 │   ├── apple-auth.mjs       # Apple 로그인 검증 · 연결 해제
 │   ├── review-auth.mjs      # 스토어 심사용 계정
-│   └── public/              # 개인정보처리방침 · 계정 삭제 안내 페이지
+│   └── public/              # 소개 페이지 · 개인정보처리방침 · 계정 삭제 안내
 ├── plugins/                 # 로컬 Expo config plugin (iOS UIScene 생명주기)
 ├── Dockerfile               # 동기화 서버 이미지
 ├── docker-compose.yml       # 서버 배포 설정
