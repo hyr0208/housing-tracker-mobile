@@ -18,6 +18,7 @@ const publicDir = path.join(__dirname, 'public');
 const publicPages = {
   '': ['index.html', 'text/html; charset=utf-8'],
   '/img/icon.png': ['img/icon.png', 'image/png'],
+  '/img/og.jpg': ['img/og.jpg', 'image/jpeg'],
   ...Object.fromEntries(['01-home', '02-wait-estimate', '03-notices', '04-waiting-explore', '05-complex-info', '06-schedule']
     .map((name) => [`/img/${name}.jpg`, [`img/${name}.jpg`, 'image/jpeg']])),
   '/privacy': ['privacy.html', 'text/html; charset=utf-8'],
