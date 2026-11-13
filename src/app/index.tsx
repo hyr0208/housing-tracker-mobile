@@ -90,6 +90,12 @@ function toPushNotification(push: Notifications.Notification): AppNotification {
 }
 
 // 홈 인사말을 시간대에 맞춘다. 아침 5~11시, 오후 11~17시, 저녁 17~22시, 그 외는 밤.
+// 예전 Apple 로그인은 이름을 못 받으면 'Apple 사용자'로 저장해서, 이름이 없는 것으로 본다.
+function displayName(name?: string) {
+  const value = name?.trim() ?? '';
+  return value === 'Apple 사용자' ? '' : value;
+}
+
 function greetingFor(hour: number) {
   if (hour >= 5 && hour < 11) return '좋은 아침이에요';
   if (hour >= 11 && hour < 17) return '좋은 오후예요';
@@ -245,7 +251,7 @@ export default function HomeScreen() {
   const tasks = data.tasks;
   const isLoggedIn = Boolean(data.profile);
   const selected = applications.find((item) => item.id === selectedId) ?? applications[0];
-  const profileName = data.profileName?.trim() || '';
+  const profileName = displayName(data.profileName);
   const completed = tasks.filter((task) => task.done).length;
   const progressPercent = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
   const rankChange = selected ? selected.previousRank - selected.rank : 0;
@@ -379,6 +385,13 @@ export default function HomeScreen() {
 
   // 로그인 후 서버에 저장된 계정 데이터가 있으면 불러오고, 없으면 지금 기기 데이터를 계정에 저장한다.
   // 계정에 한 번도 저장되지 않은 내역(예전 버전에서 동기화가 안 됐던 경우)은 로그아웃해도 남겨 두고, 다시 로그인하면 계정에 합친다.
+  const saveProfileName = () => {
+    const name = draftProfileName.trim();
+    if (!name) return;
+    updateData({ ...data, profileName: name, profile: data.profile ? { ...data.profile, nickname: name } : undefined });
+    setIsProfileOpen(false);
+  };
+
   const logout = () => {
     const keepLocal = !isAccountReady();
     if (data.profile) void clearAccountSession(data.profile).catch(() => undefined);
@@ -402,12 +415,13 @@ export default function HomeScreen() {
         // 서버 내용을 못 받았으면 이 기기 데이터만 쓰고, 서버에는 올리지 않는다(다음 실행 때 다시 합친다).
       }
     }
-    const nickname = accountData.profileName || accountProfile.nickname;
+    const nickname = displayName(accountData.profileName) || accountProfile.nickname;
     const next = { ...accountData, profile: { ...accountProfile, nickname }, profileName: nickname };
     updateData(next);
     setSelectedId(next.applications[0]?.id);
     setDraftProfileName(nickname);
-    showDialog('로그인 완료', synced ? `${nickname}님, 환영해요.` : `${nickname}님, 환영해요. 계정에 저장된 내역은 잠시 후 앱을 다시 열면 불러올게요.`, { tone: 'success' });
+    const welcome = nickname ? `${nickname}님, 환영해요.` : '환영해요. 내 정보에서 홈에서 부를 이름을 정할 수 있어요.';
+    showDialog('로그인 완료', synced ? welcome : `${welcome} 계정에 저장된 내역은 잠시 후 앱을 다시 열면 불러올게요.`, { tone: 'success' });
   };
 
   const handleAppleLogin = async () => {
@@ -845,7 +859,7 @@ export default function HomeScreen() {
               <Text style={styles.brand}>내 차례</Text>
             </View>
             <View style={styles.headerActions}>
-              <Pressable style={styles.profileButton} accessibilityLabel="내 정보" onPress={() => { setDraftProfileName(data.profile?.nickname ?? data.profileName ?? ''); setIsProfileOpen(true); }}>
+              <Pressable style={styles.profileButton} accessibilityLabel="내 정보" onPress={() => { setDraftProfileName(profileName); setIsProfileOpen(true); }}>
                 <Text style={styles.profileInitial}>{profileName ? profileName.slice(0, 1) : '내'}</Text>
               </Pressable>
               <Pressable style={styles.notification} accessibilityLabel="알림" onPress={() => isLoggedIn ? setIsNotificationOpen(true) : setIsProfileOpen(true)}>
@@ -1053,7 +1067,7 @@ export default function HomeScreen() {
       </SheetModal>
 
       <SheetModal visible={isProfileOpen} backdropColor="#203b3088" onRequestClose={() => setIsProfileOpen(false)}>
-                <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsProfileOpen(false)} accessibilityLabel="닫기" /><View style={[styles.modalCard, { paddingBottom: 36 + sheetInset }]}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>MY PROFILE</Text><Text style={styles.modalTitle} onLongPress={() => { if (!data.profile) setIsReviewLoginOpen(true); }}>내 정보</Text></View><Pressable onPress={() => setIsProfileOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View>{data.profile ? <><Text style={styles.loggedInLabel}>{data.profile.provider === 'apple' ? 'Apple로 로그인됨' : data.profile.provider === 'review' ? '심사용 계정으로 로그인됨' : '카카오로 로그인됨'}</Text><Text style={styles.loggedInName}>{data.profile.nickname}</Text><Text style={styles.modalCopy}>신청 내역과 알림 설정이 내 계정에 저장돼요.</Text>{accountSyncError && <Text style={styles.syncErrorText}>계정 동기화가 안 되고 있어요: {accountSyncError}</Text>}<Pressable style={styles.outlineButton} onPress={logout}><Text style={styles.outlineButtonText}>로그아웃</Text></Pressable><Pressable style={styles.deleteAccountButton} onPress={deleteAccount} disabled={isDeletingAccount}><Text style={styles.deleteAccountText}>{isDeletingAccount ? '계정 삭제 중…' : '계정 삭제'}</Text></Pressable></> : <><Text style={styles.modalCopy}>로그인하면 신청 내역과 알림 설정을 계정에 저장하고 다른 기기에서도 불러올 수 있어요.</Text>{canUseAppleSignIn && <AppleAuthentication.AppleAuthenticationButton buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN} buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK} cornerRadius={11} style={[styles.appleButton, isAppleLoading && styles.appleButtonLoading]} onPress={() => { if (!isAppleLoading) void handleAppleLogin(); }} />}<Pressable style={styles.kakaoButton} disabled={!kakaoNativeAppKey || isKakaoLoading} onPress={() => void handleKakaoLogin()}><View style={styles.kakaoSymbol}><View style={styles.kakaoBubble} /><View style={styles.kakaoTail} /></View><Text style={styles.kakaoButtonText}>{isKakaoLoading ? '로그인 중…' : '카카오로 로그인'}</Text></Pressable>{isReviewLoginOpen && <><Text style={styles.inputLabel}>심사용 아이디</Text><TextInput value={draftReviewId} onChangeText={setDraftReviewId} autoCapitalize="none" autoCorrect={false} placeholderTextColor="#a9b4ae" style={styles.input} /><Text style={styles.inputLabel}>비밀번호</Text><TextInput value={draftReviewPassword} onChangeText={setDraftReviewPassword} secureTextEntry autoCapitalize="none" autoCorrect={false} placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} disabled={isReviewLoading} onPress={() => void handleReviewLogin()}><Text style={styles.saveButtonText}>{isReviewLoading ? '로그인 중…' : '로그인'}</Text></Pressable></>}<Text style={styles.loginHint}>로그인하지 않고 이름만 저장할 수도 있어요.</Text><Text style={styles.inputLabel}>이름</Text><TextInput value={draftProfileName} onChangeText={setDraftProfileName} placeholder="예: 민지" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={() => { const name = draftProfileName.trim(); if (!name) return; updateData({ ...data, profileName: name }); setIsProfileOpen(false); }}><Text style={styles.saveButtonText}>이름만 저장하기</Text></Pressable></>}</View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
+                <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setIsProfileOpen(false)} accessibilityLabel="닫기" /><View style={[styles.modalCard, { paddingBottom: 36 + sheetInset }]}><View style={styles.modalHeader}><View><Text style={styles.cardEyebrow}>MY PROFILE</Text><Text style={styles.modalTitle} onLongPress={() => { if (!data.profile) setIsReviewLoginOpen(true); }}>내 정보</Text></View><Pressable onPress={() => setIsProfileOpen(false)}><Text style={styles.closeText}>×</Text></Pressable></View>{data.profile ? <><Text style={styles.loggedInLabel}>{data.profile.provider === 'apple' ? 'Apple로 로그인됨' : data.profile.provider === 'review' ? '심사용 계정으로 로그인됨' : '카카오로 로그인됨'}</Text><Text style={styles.loggedInName}>{profileName || '이름을 정해 주세요'}</Text><Text style={styles.modalCopy}>신청 내역과 알림 설정이 내 계정에 저장돼요.</Text><Text style={styles.inputLabel}>홈에서 부를 이름</Text><TextInput value={draftProfileName} onChangeText={setDraftProfileName} placeholder="예: 민지" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={saveProfileName}><Text style={styles.saveButtonText}>이름 저장하기</Text></Pressable>{accountSyncError && <Text style={styles.syncErrorText}>계정 동기화가 안 되고 있어요: {accountSyncError}</Text>}<Pressable style={styles.outlineButton} onPress={logout}><Text style={styles.outlineButtonText}>로그아웃</Text></Pressable><Pressable style={styles.deleteAccountButton} onPress={deleteAccount} disabled={isDeletingAccount}><Text style={styles.deleteAccountText}>{isDeletingAccount ? '계정 삭제 중…' : '계정 삭제'}</Text></Pressable></> : <><Text style={styles.modalCopy}>로그인하면 신청 내역과 알림 설정을 계정에 저장하고 다른 기기에서도 불러올 수 있어요.</Text>{canUseAppleSignIn && <AppleAuthentication.AppleAuthenticationButton buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN} buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK} cornerRadius={11} style={[styles.appleButton, isAppleLoading && styles.appleButtonLoading]} onPress={() => { if (!isAppleLoading) void handleAppleLogin(); }} />}<Pressable style={styles.kakaoButton} disabled={!kakaoNativeAppKey || isKakaoLoading} onPress={() => void handleKakaoLogin()}><View style={styles.kakaoSymbol}><View style={styles.kakaoBubble} /><View style={styles.kakaoTail} /></View><Text style={styles.kakaoButtonText}>{isKakaoLoading ? '로그인 중…' : '카카오로 로그인'}</Text></Pressable>{isReviewLoginOpen && <><Text style={styles.inputLabel}>심사용 아이디</Text><TextInput value={draftReviewId} onChangeText={setDraftReviewId} autoCapitalize="none" autoCorrect={false} placeholderTextColor="#a9b4ae" style={styles.input} /><Text style={styles.inputLabel}>비밀번호</Text><TextInput value={draftReviewPassword} onChangeText={setDraftReviewPassword} secureTextEntry autoCapitalize="none" autoCorrect={false} placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} disabled={isReviewLoading} onPress={() => void handleReviewLogin()}><Text style={styles.saveButtonText}>{isReviewLoading ? '로그인 중…' : '로그인'}</Text></Pressable></>}<Text style={styles.loginHint}>로그인하지 않고 이름만 저장할 수도 있어요.</Text><Text style={styles.inputLabel}>이름</Text><TextInput value={draftProfileName} onChangeText={setDraftProfileName} placeholder="예: 민지" placeholderTextColor="#a9b4ae" style={styles.input} /><Pressable style={styles.saveButton} onPress={saveProfileName}><Text style={styles.saveButtonText}>이름만 저장하기</Text></Pressable></>}</View>{dialog && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}</KeyboardAvoidingView>
       </SheetModal>
 
       {dialog && !isAddOpen && !isRankOpen && !isNotificationOpen && !isProfileOpen && <View style={styles.dialogLayer}><CustomDialog dialog={dialog} onDismiss={() => setDialog(null)} /></View>}

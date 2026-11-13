@@ -39,9 +39,9 @@ export async function loginWithApple(): Promise<AppleProfile | null> {
   if (!response.ok || !body.token || !body.userId) throw new Error(body.error || 'Apple 로그인 확인에 실패했어요. 잠시 후 다시 시도해주세요.');
   await SecureStore.setItemAsync(SESSION_KEY, body.token);
 
-  // 이름은 처음 로그인할 때만 전달되고, 사용자가 공유하지 않을 수도 있다.
+  // 이름은 처음 로그인할 때만 전달되고, 사용자가 공유하지 않을 수도 있다. 없으면 비워 두고 내 정보에서 정하게 한다.
   const name = [credential.fullName?.familyName, credential.fullName?.givenName].filter(Boolean).join('');
-  return { id: body.userId, nickname: name || 'Apple 사용자' };
+  return { id: body.userId, nickname: name };
 }
 
 export async function getAppleSessionToken(): Promise<string> {
