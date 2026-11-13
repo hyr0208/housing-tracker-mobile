@@ -14,8 +14,12 @@ const statePath = path.join(stateDir, 'sync-state.json');
 const accountsPath = path.join(stateDir, 'account-data.json');
 const appleTokensPath = path.join(stateDir, 'apple-tokens.json');
 const publicDir = path.join(__dirname, 'public');
-// 앱스토어·플레이스토어에 등록하는 개인정보 처리방침과 계정 삭제 안내 페이지
+// 홍보용 첫 화면, 앱스토어·플레이스토어에 등록하는 개인정보 처리방침과 계정 삭제 안내 페이지
 const publicPages = {
+  '': ['index.html', 'text/html; charset=utf-8'],
+  '/img/icon.png': ['img/icon.png', 'image/png'],
+  ...Object.fromEntries(['01-home', '02-wait-estimate', '03-notices', '04-waiting-explore', '05-complex-info', '06-schedule']
+    .map((name) => [`/img/${name}.jpg`, [`img/${name}.jpg`, 'image/jpeg']])),
   '/privacy': ['privacy.html', 'text/html; charset=utf-8'],
   '/account-deletion': ['account-deletion.html', 'text/html; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
@@ -308,6 +312,17 @@ const server = http.createServer(async (request, response) => {
       const [file, contentType] = page;
       response.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=300' });
       response.end(await fs.readFile(path.join(publicDir, file)));
+      return;
+    }
+
+    // 카페 글 등에 하나만 걸어 두면 아이폰은 앱스토어, 안드로이드는 플레이스토어, 그 밖에는 소개 페이지로 보낸다.
+    if (request.method === 'GET' && url.pathname.replace(/\/$/, '') === '/download') {
+      const userAgent = request.headers['user-agent'] || '';
+      const location = /iPhone|iPad|iPod/i.test(userAgent) ? 'https://apps.apple.com/kr/app/id6824419011'
+        : /Android/i.test(userAgent) ? 'https://play.google.com/store/apps/details?id=kr.co.uulab.housingtracker'
+          : '/';
+      response.writeHead(302, { Location: location, 'Cache-Control': 'no-store' });
+      response.end();
       return;
     }
 

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>내 차례 - 임대주택 예비순번·대기현황 알림</title>
+<meta name="description" content="임대주택 예비순번을 기록하면 내 차례가 언제쯤 올지 알려드려요. 단지별 대기인원, 1년 퇴거 세대 수, 새 모집공고 알림까지 한 곳에서.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="내 차례 - 임대주택 예비순번·대기현황 알림">
+<meta property="og:description" content="예비순번 기록, 예상 입주 시기, 단지별 대기현황, 새 모집공고 알림까지 한 곳에서.">
+<meta property="og:image" content="https://housing-api.yyyerin.co.kr/img/01-home.jpg">
+<meta property="og:url" content="https://housing-api.yyyerin.co.kr/">
+<link rel="icon" href="/img/icon.png">
+<link rel="stylesheet" href="/style.css">
+<style>
+  .hero { text-align: center; padding: 24px 0 8px; }
+  .hero img.icon { width: 88px; height: 88px; border-radius: 22px; box-shadow: 0 6px 20px rgba(41, 72, 61, 0.15); }
+  .hero h1 { font-size: 32px; margin: 18px 0 8px; }
+  .hero .lead { font-size: 17px; margin: 0 auto; max-width: 30em; }
+  .stores { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 26px 0 8px; }
+  .store { display: inline-flex; align-items: center; justify-content: center; min-width: 170px; padding: 13px 20px; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 800; text-decoration: none; }
+  .store.alt { background: var(--surface); color: var(--accent); border: 1px solid var(--line); }
+  .free { font-size: 13px; text-align: center; margin: 0; }
+  .shots { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 28px 0 8px; margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+  .shots img { flex: 0 0 auto; width: 200px; height: auto; border-radius: 18px; border: 1px solid var(--line); scroll-snap-align: center; }
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 16px; }
+  .feature { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+  .feature h3 { font-size: 16px; margin: 0 0 4px; }
+  .feature p { font-size: 14px; margin: 0; line-height: 1.6; }
+  .note { font-size: 13px; }
+  footer { margin-top: 40px; font-size: 13px; text-align: center; color: var(--muted); }
+  footer a { margin: 0 6px; }
+</style>
+</head>
+<body>
+<main>
+  <section class="hero">
+    <img class="icon" src="/img/icon.png" alt="내 차례 앱 아이콘" width="88" height="88">
+    <h1>내 차례</h1>
+    <p class="lead">임대주택 예비순번, 언제쯤 내 차례가 올까요?<br>순번을 기록하면 예상 시기를 알려드리고,<br>대기인원이 바뀌면 바로 알려드려요.</p>
+    <div class="stores">
+      <a class="store" href="https://apps.apple.com/kr/app/id6824419011">App Store에서 받기</a>
+      <a class="store" href="https://play.google.com/store/apps/details?id=kr.co.uulab.housingtracker">Google Play에서 받기</a>
+    </div>
+    <p class="free">무료 · 광고 없음 · 로그인 없이도 쓸 수 있어요</p>
+  </section>
+
+  <div class="shots" aria-label="앱 화면 미리보기">
+    <img src="/img/01-home.jpg" alt="홈 화면" loading="lazy">
+    <img src="/img/02-wait-estimate.jpg" alt="내 차례 예상 시기와 순번 그래프" loading="lazy">
+    <img src="/img/03-notices.jpg" alt="모집공고" loading="lazy">
+    <img src="/img/04-waiting-explore.jpg" alt="단지별 대기현황" loading="lazy">
+    <img src="/img/05-complex-info.jpg" alt="단지 정보" loading="lazy">
+    <img src="/img/06-schedule.jpg" alt="다가오는 일정" loading="lazy">
+  </div>
+
+  <h2>이런 걸 할 수 있어요</h2>
+  <div class="features">
+    <div class="feature"><h3>내 차례 예상 시기</h3><p>예비순번을 기록하면 순번이 줄어든 속도와 단지의 1년 퇴거 세대 수로 차례가 올 시기를 계산해요.</p></div>
+    <div class="feature"><h3>대기인원 변동 알림</h3><p>마이홈 공개 대기현황을 1시간마다 확인해서, 신청한 단지의 대기인원이 바뀌면 푸시로 알려드려요.</p></div>
+    <div class="feature"><h3>단지별 대기현황 비교</h3><p>지역의 단지를 대기인원이 적은 순으로 보고, 주택형별 대기인원과 1년 퇴거 수를 비교해요.</p></div>
+    <div class="feature"><h3>새 모집공고 알림</h3><p>관심 지역과 공급 유형을 고르면 조건에 맞는 새 공고가 올라올 때 알려드려요.</p></div>
+    <div class="feature"><h3>공가·단지 정보</h3><p>LH 부동산맵의 주택형별 공가, 세대수, 입주 시기, 지난 모집공고를 함께 보여줘요.</p></div>
+    <div class="feature"><h3>일정·입주 체크리스트</h3><p>서류 마감·계약일과 할 일에 날짜를 넣으면 하루 전과 당일 아침에 알려드려요. 추천 항목으로 뭐부터 할지 바로 시작할 수 있어요.</p></div>
+  </div>
+
+  <h2>알아 두세요</h2>
+  <p class="note">마이홈이 공개하는 건 개인 예비순번이 아니라 단지별 대기인원이에요. 예상 시기는 공개 자료로 추정한 값이고, 실제 순번은 LH·SH 등 공급기관에서 확인해 주세요. 내 차례는 개인이 만든 앱이며 공공기관과 관련이 없어요. 주민등록번호나 공동인증서는 받지 않아요.</p>
+
+  <footer>
+    <a href="/privacy">개인정보 처리방침</a>·<a href="/account-deletion">계정 삭제 안내</a>
+  </footer>
+</main>
+</body>
+</html>
